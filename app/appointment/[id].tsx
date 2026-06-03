@@ -79,6 +79,7 @@ interface IAppointmentDetails {
     payments: IPayment[];
     address?: { full: string };
     customer?: { name: string; email: string; phone: string; jobsCount: number };
+    appointments?: { id: number; status: number; start: string; end: string }[];
   };
 }
 
@@ -316,6 +317,7 @@ export default function AppointmentDetailsScreen() {
   const [copyModalVisible, setCopyModalVisible] = useState(false);
   const [payModalVisible, setPayModalVisible] = useState(false);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [jobHistoryModalVisible, setJobHistoryModalVisible] = useState(false);
 
   // Active Timer Elapsed state
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -827,7 +829,10 @@ export default function AppointmentDetailsScreen() {
           )}
 
           {/* Date & Time */}
-          <View style={styles.heroTimeRow}>
+          <Pressable
+            onPress={() => setJobHistoryModalVisible(true)}
+            style={({ pressed }) => [styles.heroTimeRow, pressed && { opacity: 0.75 }]}
+          >
             <View style={styles.heroTimePill}>
               <SymbolView
                 name={{ ios: 'calendar', android: 'calendar_today', web: 'calendar_today' }}
@@ -848,7 +853,7 @@ export default function AppointmentDetailsScreen() {
                 {formatDate(appointment.start, 'hh:mm A')} — {formatDate(appointment.end, 'hh:mm A')}
               </Text>
             </View>
-          </View>
+          </Pressable>
         </LinearGradient>
       </Animated.View>
 
@@ -982,54 +987,6 @@ export default function AppointmentDetailsScreen() {
         </Pressable>
       </Animated.View>
 
-      {/* ═══ APPOINTMENT INFO CARD ═════════════════════════════════════════════ */}
-      <Animated.View entering={FadeInDown.duration(500).delay(300)} style={{ paddingHorizontal: 16, marginTop: 12 }}>
-        <View style={[styles.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
-          <View style={styles.cardHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={[styles.cardHeaderIcon, { backgroundColor: c.primaryMuted }]}>
-                <SymbolView
-                  name={{ ios: 'info.circle.fill', android: 'info', web: 'info' }}
-                  size={14}
-                  tintColor={c.primary}
-                />
-              </View>
-              <Text style={[styles.cardTitle, { color: c.text }]}>Appointment Info</Text>
-            </View>
-            <View style={[styles.statusChip, { backgroundColor: currentStatus.color + '18' }]}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: currentStatus.color }} />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: currentStatus.color }}>
-                {currentStatus.label}
-              </Text>
-            </View>
-          </View>
-
-          <InfoRowIcon
-            icon={{ ios: 'calendar', android: 'calendar_today', web: 'calendar_today' }}
-            label="Scheduled"
-            value={`${formatDate(appointment.start, 'MMM DD, YYYY')} at ${formatDate(appointment.start, 'hh:mm A')}`}
-            isDark={isDark}
-          />
-
-          <View style={[styles.divider, { backgroundColor: c.divider }]} />
-
-          <InfoRowIcon
-            icon={{ ios: 'clock', android: 'schedule', web: 'schedule' }}
-            label="End Time"
-            value={`${formatDate(appointment.end, 'MMM DD, YYYY')} at ${formatDate(appointment.end, 'hh:mm A')}`}
-            isDark={isDark}
-          />
-
-          <View style={[styles.divider, { backgroundColor: c.divider }]} />
-
-          <InfoRowIcon
-            icon={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
-            label="Assigned Techs"
-            value={appointment.techs?.map((t) => t.name).join(', ') || 'Unassigned'}
-            isDark={isDark}
-          />
-        </View>
-      </Animated.View>
 
       {/* ═══ CLIENT DETAILS CARD ═══════════════════════════════════════════════ */}
       <Animated.View entering={FadeInDown.duration(500).delay(400)} style={{ paddingHorizontal: 16, marginTop: 12 }}>
@@ -1578,6 +1535,92 @@ export default function AppointmentDetailsScreen() {
 
             <Pressable
               onPress={() => setHistoryModalVisible(false)}
+              style={({ pressed }) => [
+                styles.modalActionBtn,
+                { backgroundColor: c.primary, marginTop: 12 },
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff' }}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ═══ MODAL 4: Job Appointments History ═════════════════════════════════════ */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={jobHistoryModalVisible}
+        onRequestClose={() => setJobHistoryModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', maxHeight: '80%' }]}>
+            {/* Drag Handle */}
+            <View style={styles.dragHandle} />
+
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: c.text }]}>Job History</Text>
+              <Pressable
+                onPress={() => setJobHistoryModalVisible(false)}
+                hitSlop={15}
+                style={({ pressed }) => [styles.modalCloseBtn, { backgroundColor: c.inputBg }, pressed && { opacity: 0.7 }]}
+              >
+                <SymbolView
+                  name={{ ios: 'xmark', android: 'close', web: 'close' }}
+                  size={14}
+                  tintColor={c.textMuted}
+                />
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingVertical: 8, gap: 8 }} showsVerticalScrollIndicator={false}>
+              {!appointment.job.appointments || appointment.job.appointments.length === 0 ? (
+                <Text style={{ textAlign: 'center', fontSize: 13, fontStyle: 'italic', color: c.textMuted, paddingVertical: 20 }}>
+                  No other appointments found for this job.
+                </Text>
+              ) : (
+                appointment.job.appointments.map((appt, idx) => {
+                  const statusConf = statusConfig[appt.status] || statusConfig[0];
+                  return (
+                    <Pressable
+                      key={appt.id || idx}
+                      onPress={() => {
+                        setJobHistoryModalVisible(false);
+                        router.push(`/appointment/${appt.id}` as any);
+                      }}
+                      style={({ pressed }) => [
+                        styles.timerHistoryItem,
+                        {
+                          backgroundColor: c.timerItemBg,
+                          borderLeftColor: statusConf.color,
+                        },
+                        pressed && { opacity: 0.7 },
+                      ]}
+                    >
+                      <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: c.text }}>
+                          {formatDate(appt.start, 'MMM DD, YYYY')}
+                        </Text>
+                        <Text style={{ fontSize: 11, fontWeight: '500', color: c.textMuted }}>
+                          {formatDate(appt.start, 'hh:mm A')} — {formatDate(appt.end, 'hh:mm A')}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                        <View style={[styles.miniChip, { backgroundColor: statusConf.color + '20' }]}>
+                          <Text style={{ fontSize: 9, fontWeight: '700', color: statusConf.color }}>
+                            {statusConf.label}
+                          </Text>
+                        </View>
+                      </View>
+                    </Pressable>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            <Pressable
+              onPress={() => setJobHistoryModalVisible(false)}
               style={({ pressed }) => [
                 styles.modalActionBtn,
                 { backgroundColor: c.primary, marginTop: 12 },
