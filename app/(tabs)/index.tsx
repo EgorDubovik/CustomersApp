@@ -99,6 +99,7 @@ export default function TabOneScreen() {
   const isDark = colorScheme === 'dark';
   const themeStyles = isDark ? darkStyles : lightStyles;
 
+  const [initialDate] = useState(() => new Date());
   const [appointments, setAppointments] = useState<IAppointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -226,8 +227,8 @@ export default function TabOneScreen() {
         endTime="20:00"
         blockHeight={50}
         showCurrentTimeLine={true}
-        currentDate={new Date()}
-        defaultViewType="week"
+        currentDate={initialDate}
+        defaultViewType="day"
         events={mappedEvents}
         refreshing={refreshing}
         onRefresh={() => fetchAppointments(true)}

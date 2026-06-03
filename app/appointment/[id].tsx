@@ -10,13 +10,31 @@ import {
   TextInput,
   Alert,
   GestureResponderEvent,
+  Dimensions,
+  Linking,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
+import * as Clipboard from 'expo-clipboard';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/context/AuthContext';
 import { API_URL } from '@/constants/Config';
 import { useColorScheme } from '@/components/useColorScheme';
 import { formatDate } from '@/components/scheduler/utils/TimeHelper';
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSequence,
+  withSpring,
+  Easing,
+} from 'react-native-reanimated';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ITech {
   id: number;
@@ -70,13 +88,216 @@ interface Point {
   y: number;
 }
 
+// ─── Color Palette ────────────────────────────────────────────────────────────
+
+const palette = {
+  light: {
+    bg: '#F0F2F5',
+    card: 'rgba(255,255,255,0.92)',
+    cardBorder: 'rgba(0,0,0,0.06)',
+    primary: '#6366F1',
+    primaryMuted: 'rgba(99,102,241,0.12)',
+    success: '#10B981',
+    successMuted: 'rgba(16,185,129,0.12)',
+    warning: '#F59E0B',
+    warningMuted: 'rgba(245,158,11,0.12)',
+    danger: '#EF4444',
+    dangerMuted: 'rgba(239,68,68,0.10)',
+    text: '#1E293B',
+    textSecondary: '#475569',
+    textMuted: '#94A3B8',
+    divider: 'rgba(0,0,0,0.06)',
+    inputBg: 'rgba(0,0,0,0.03)',
+    timerItemBg: 'rgba(0,0,0,0.03)',
+    heroGradient: ['#6366F1', '#818CF8'] as [string, string],
+    heroGradientSuccess: ['#059669', '#10B981'] as [string, string],
+    heroGradientWarning: ['#D97706', '#F59E0B'] as [string, string],
+    shadow: '#000',
+  },
+  dark: {
+    bg: '#0F172A',
+    card: 'rgba(30,41,59,0.85)',
+    cardBorder: 'rgba(255,255,255,0.06)',
+    primary: '#818CF8',
+    primaryMuted: 'rgba(129,140,248,0.15)',
+    success: '#34D399',
+    successMuted: 'rgba(52,211,153,0.15)',
+    warning: '#FBBF24',
+    warningMuted: 'rgba(251,191,36,0.15)',
+    danger: '#F87171',
+    dangerMuted: 'rgba(248,113,113,0.12)',
+    text: '#F1F5F9',
+    textSecondary: '#CBD5E1',
+    textMuted: '#64748B',
+    divider: 'rgba(255,255,255,0.06)',
+    inputBg: 'rgba(255,255,255,0.05)',
+    timerItemBg: 'rgba(255,255,255,0.04)',
+    heroGradient: ['#4338CA', '#6366F1'] as [string, string],
+    heroGradientSuccess: ['#047857', '#059669'] as [string, string],
+    heroGradientWarning: ['#B45309', '#D97706'] as [string, string],
+    shadow: '#000',
+  },
+};
+
+// ─── Pulsing Dot Component ────────────────────────────────────────────────────
+
+function PulsingDot({ color }: { color: string }) {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.6, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <View style={{ width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View
+        style={[
+          {
+            width: 10,
+            height: 10,
+            borderRadius: 5,
+            backgroundColor: color,
+          },
+          animStyle,
+        ]}
+      />
+    </View>
+  );
+}
+
+// ─── Avatar Initials Component ────────────────────────────────────────────────
+
+function AvatarInitials({ name, size = 48 }: { name: string; size?: number }) {
+  const initials = name
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
+  return (
+    <LinearGradient
+      colors={['#6366F1', '#A78BFA']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={{ color: '#fff', fontSize: size * 0.38, fontWeight: '800', letterSpacing: 1 }}>
+        {initials}
+      </Text>
+    </LinearGradient>
+  );
+}
+
+// ─── Progress Bar Component ───────────────────────────────────────────────────
+
+function PaymentProgressBar({ total, remaining, isDark }: { total: number; remaining: number; isDark: boolean }) {
+  const paid = total - remaining;
+  const pct = total > 0 ? Math.min(1, Math.max(0, paid / total)) : 0;
+  const c = isDark ? palette.dark : palette.light;
+
+  return (
+    <View style={{ gap: 8 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 12, fontWeight: '600', color: c.success }}>
+          Paid: ${paid.toFixed(2)}
+        </Text>
+        <Text style={{ fontSize: 12, fontWeight: '600', color: c.danger }}>
+          Due: ${remaining.toFixed(2)}
+        </Text>
+      </View>
+      <View style={{ height: 6, borderRadius: 3, backgroundColor: c.inputBg, overflow: 'hidden' }}>
+        <LinearGradient
+          colors={isDark ? ['#34D399', '#6EE7B7'] : ['#10B981', '#34D399']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ height: 6, borderRadius: 3, width: `${pct * 100}%` as any }}
+        />
+      </View>
+    </View>
+  );
+}
+
+// ─── Info Row with Icon ───────────────────────────────────────────────────────
+
+function InfoRowIcon({
+  icon,
+  label,
+  value,
+  isDark,
+  valueStyle,
+}: {
+  icon: any;
+  label: string;
+  value: string;
+  isDark: boolean;
+  valueStyle?: any;
+}) {
+  const c = isDark ? palette.dark : palette.light;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 6 }}>
+      <View
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          backgroundColor: c.primaryMuted,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <SymbolView name={icon} size={16} tintColor={c.primary} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ fontSize: 11, fontWeight: '600', color: c.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          {label}
+        </Text>
+        <Text style={[{ fontSize: 14, fontWeight: '600', color: c.text }, valueStyle]}>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── Main Screen Component ────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
 export default function AppointmentDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { token } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const themeStyles = isDark ? darkStyles : lightStyles;
+  const c = isDark ? palette.dark : palette.light;
 
   // State
   const [appointment, setAppointment] = useState<IAppointmentDetails | null>(null);
@@ -437,277 +658,504 @@ export default function AppointmentDetailsScreen() {
     return vectors;
   };
 
-  // Loading Indicator
+  // ─── Loading State ──────────────────────────────────────────────────────────
+
   if (loading) {
     return (
-      <View style={[styles.center, themeStyles.bg]}>
-        <ActivityIndicator size="large" color={isDark ? '#805dca' : '#4361ee'} />
-        <Text style={[styles.loadingText, themeStyles.textMuted]}>
-          Loading details...
-        </Text>
+      <View style={[styles.center, { backgroundColor: c.bg }]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={{ alignItems: 'center', gap: 16 }}>
+          <View style={{
+            width: 64,
+            height: 64,
+            borderRadius: 32,
+            backgroundColor: c.primaryMuted,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <ActivityIndicator size="large" color={c.primary} />
+          </View>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: c.textMuted }}>
+            Loading details...
+          </Text>
+        </View>
       </View>
     );
   }
 
-  // Error Card
+  // ─── Error State ────────────────────────────────────────────────────────────
+
   if (error || !appointment) {
     return (
-      <View style={[styles.center, themeStyles.bg, { paddingHorizontal: 24 }]}>
-        <SymbolView
-          name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }}
-          size={50}
-          tintColor="#e7515a"
-          style={{ marginBottom: 16 }}
-        />
-        <Text style={styles.errorText}>{error || 'Appointment data is empty.'}</Text>
-        <Pressable onPress={() => fetchDetails()} style={[styles.retryBtn, themeStyles.btnBorder]}>
-          <Text style={[styles.retryText, themeStyles.textPrimary]}>Retry</Text>
-        </Pressable>
+      <View style={[styles.center, { backgroundColor: c.bg, paddingHorizontal: 32 }]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={{
+          alignItems: 'center',
+          gap: 16,
+          padding: 32,
+          backgroundColor: c.card,
+          borderRadius: 20,
+          borderWidth: 1,
+          borderColor: c.cardBorder,
+        }}>
+          <View style={{
+            width: 64,
+            height: 64,
+            borderRadius: 32,
+            backgroundColor: c.dangerMuted,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <SymbolView
+              name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }}
+              size={28}
+              tintColor={c.danger}
+            />
+          </View>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: c.text, textAlign: 'center' }}>
+            Something went wrong
+          </Text>
+          <Text style={{ fontSize: 13, color: c.textMuted, textAlign: 'center' }}>
+            {error || 'Appointment data is empty.'}
+          </Text>
+          <Pressable
+            onPress={() => fetchDetails()}
+            style={({ pressed }) => ({
+              backgroundColor: c.primary,
+              paddingVertical: 12,
+              paddingHorizontal: 32,
+              borderRadius: 12,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Try Again</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
+  // ─── Computed Values ────────────────────────────────────────────────────────
+
   const isTimerRunning = appointment.timers?.some((t) => !t.stopped_at);
-  const statusColors = ['#4361ee', '#00ab55', '#e2a03f']; // Blue, Green, Muted Gold
-  const statusTexts = ['Scheduled', 'Active', 'Finished'];
+  const statusConfig = [
+    { label: 'Scheduled', color: c.primary, gradient: c.heroGradient, icon: { ios: 'car.fill', android: 'local_shipping', web: 'local_shipping' } as const, action: 'On My Way' },
+    { label: 'Active', color: c.success, gradient: c.heroGradientSuccess, icon: { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' } as const, action: 'Finish' },
+    { label: 'Finished', color: c.warning, gradient: c.heroGradientWarning, icon: { ios: 'arrow.counterclockwise.circle.fill', android: 'replay', web: 'replay' } as const, action: 'Reactivate' },
+  ];
+  const currentStatus = statusConfig[appointment.status] || statusConfig[0];
+  const customerName = appointment.job.customer?.name || 'Unknown Client';
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ─── RENDER ─────────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
 
   return (
-    <ScrollView style={[styles.container, themeStyles.bg]} contentContainerStyle={styles.scrollContent}>
-      <Stack.Screen options={{ title: `Job #${appointment.job.id}` }} />
+    <ScrollView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      contentContainerStyle={{ paddingBottom: 40 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <Stack.Screen options={{ headerShown: false }} />
 
-      {/* ─── Header Buttons Row (Web matches Header.tsx toolbar) ──────────────── */}
-      <View style={styles.actionToolbar}>
-        {/* Button 1: Status Action */}
-        <View style={styles.statusGroup}>
+      {/* ═══ HERO SECTION ═══════════════════════════════════════════════════════ */}
+      <Animated.View entering={FadeInDown.duration(500)}>
+        <LinearGradient
+          colors={currentStatus.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroSection}
+        >
+          {/* Back button */}
           <Pressable
-            onPress={handleStatusPress}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              {
-                backgroundColor: appointment.status === 2 ? '#888ea8' : '#4361ee',
-                opacity: pressed || statusLoading ? 0.75 : 1,
-              },
-            ]}
-            disabled={statusLoading}
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.heroBackBtn, pressed && { opacity: 0.7 }]}
+            hitSlop={12}
           >
-            {statusLoading ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <>
-                <SymbolView
-                  name={
-                    appointment.status === 0
-                      ? { ios: 'car.fill', android: 'local_shipping', web: 'local_shipping' }
-                      : appointment.status === 1
-                      ? { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }
-                      : { ios: 'arrow.counterclockwise.circle.fill', android: 'replay', web: 'replay' }
-                  }
-                  size={16}
-                  tintColor="#ffffff"
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={styles.btnTextWhite}>
-                  {appointment.status === 0
-                    ? 'On My Way'
-                    : appointment.status === 1
-                    ? 'Finish'
-                    : 'Activate'}
-                </Text>
-              </>
-            )}
+            <SymbolView
+              name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+              size={18}
+              tintColor="#ffffff"
+            />
           </Pressable>
 
-          {/* Optional Timer button right next to status */}
-          {appointment.status === 1 && (
+          {/* Customer Name */}
+          <Text style={styles.heroCustomerName}>{customerName}</Text>
+
+          {/* Address — tap opens maps, copy button copies to clipboard */}
+          {appointment.job.address?.full && (
             <Pressable
-              onPress={handleToggleTimer}
-              style={({ pressed }) => [
-                styles.timerBtn,
-                { backgroundColor: isTimerRunning ? '#e7515a' : '#00ab55' },
-                (pressed || timerLoading) && { opacity: 0.75 },
-              ]}
-              disabled={timerLoading}
+              onPress={() => {
+                const address = encodeURIComponent(appointment.job.address!.full);
+                const url = Platform.select({
+                  ios: `maps://app?daddr=${address}`,
+                  android: `google.navigation:q=${address}`,
+                  default: `https://www.google.com/maps/dir/?api=1&destination=${address}`,
+                });
+                Linking.openURL(url);
+              }}
+              style={({ pressed }) => [styles.heroAddressRow, pressed && { opacity: 0.75 }]}
             >
-              {timerLoading ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
+              <View style={styles.heroAddressIconWrap}>
                 <SymbolView
-                  name={isTimerRunning ? { ios: 'pause.fill', android: 'pause', web: 'pause' } : { ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }}
-                  size={18}
+                  name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
+                  size={16}
                   tintColor="#ffffff"
                 />
-              )}
+              </View>
+              <Text style={styles.heroAddressText} numberOfLines={2}>
+                {appointment.job.address.full}
+              </Text>
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  Clipboard.setStringAsync(appointment.job.address!.full);
+                  Alert.alert('Copied', 'Address copied to clipboard');
+                }}
+                style={({ pressed }) => [styles.heroCopyBtn, pressed && { backgroundColor: 'rgba(255,255,255,0.35)' }]}
+                hitSlop={6}
+              >
+                <SymbolView
+                  name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
+                  size={14}
+                  tintColor="#ffffff"
+                />
+              </Pressable>
             </Pressable>
           )}
-        </View>
 
-        {/* Button 2: Create Copy */}
+          {/* Date & Time */}
+          <View style={styles.heroTimeRow}>
+            <View style={styles.heroTimePill}>
+              <SymbolView
+                name={{ ios: 'calendar', android: 'calendar_today', web: 'calendar_today' }}
+                size={12}
+                tintColor="rgba(255,255,255,0.9)"
+              />
+              <Text style={styles.heroTimeText}>
+                {formatDate(appointment.start, 'MMM DD, YYYY')}
+              </Text>
+            </View>
+            <View style={styles.heroTimePill}>
+              <SymbolView
+                name={{ ios: 'clock', android: 'schedule', web: 'schedule' }}
+                size={12}
+                tintColor="rgba(255,255,255,0.9)"
+              />
+              <Text style={styles.heroTimeText}>
+                {formatDate(appointment.start, 'hh:mm A')} — {formatDate(appointment.end, 'hh:mm A')}
+              </Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </Animated.View>
+
+      {/* ═══ ACTION BUTTONS ═══════════════════════════════════════════════════ */}
+      <Animated.View entering={FadeInDown.duration(500).delay(100)} style={styles.actionRow}>
+        {/* Status Action Button */}
         <Pressable
-          onPress={() => {
-            setCopyDate(new Date());
-            setCopyModalVisible(true);
-          }}
+          onPress={handleStatusPress}
+          disabled={statusLoading}
           style={({ pressed }) => [
-            styles.primaryBtn,
-            themeStyles.btnBgSec,
-            pressed && { opacity: 0.8 },
+            styles.actionBtn,
+            {
+              backgroundColor: appointment.status === 2 ? c.warningMuted : c.primaryMuted,
+              borderColor: appointment.status === 2 ? c.warning : c.primary,
+            },
+            pressed && { transform: [{ scale: 0.96 }] },
+          ]}
+        >
+          {statusLoading ? (
+            <ActivityIndicator size="small" color={c.primary} />
+          ) : (
+            <>
+              <SymbolView name={currentStatus.icon} size={16} tintColor={appointment.status === 2 ? c.warning : c.primary} />
+              <Text style={[styles.actionBtnText, { color: appointment.status === 2 ? c.warning : c.primary }]}>
+                {currentStatus.action}
+              </Text>
+            </>
+          )}
+        </Pressable>
+
+        {/* Timer Button (only when active) */}
+        {appointment.status === 1 && (
+          <Pressable
+            onPress={handleToggleTimer}
+            disabled={timerLoading}
+            style={({ pressed }) => [
+              styles.actionBtnCircle,
+              {
+                backgroundColor: isTimerRunning ? c.dangerMuted : c.successMuted,
+                borderColor: isTimerRunning ? c.danger : c.success,
+              },
+              pressed && { transform: [{ scale: 0.92 }] },
+            ]}
+          >
+            {timerLoading ? (
+              <ActivityIndicator size="small" color={isTimerRunning ? c.danger : c.success} />
+            ) : (
+              <SymbolView
+                name={isTimerRunning ? { ios: 'pause.fill', android: 'pause', web: 'pause' } : { ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }}
+                size={18}
+                tintColor={isTimerRunning ? c.danger : c.success}
+              />
+            )}
+          </Pressable>
+        )}
+
+        {/* Copy Button */}
+        <Pressable
+          onPress={() => { setCopyDate(new Date()); setCopyModalVisible(true); }}
+          style={({ pressed }) => [
+            styles.actionBtn,
+            { backgroundColor: c.card, borderColor: c.cardBorder },
+            pressed && { transform: [{ scale: 0.96 }] },
           ]}
         >
           <SymbolView
             name={{ ios: 'doc.on.doc.fill', android: 'content_copy', web: 'content_copy' }}
-            size={16}
-            tintColor={isDark ? '#805dca' : '#4361ee'}
-            style={{ marginRight: 6 }}
+            size={14}
+            tintColor={c.primary}
           />
-          <Text style={[styles.btnTextSecondary, themeStyles.textPrimary]}>Copy</Text>
+          <Text style={[styles.actionBtnText, { color: c.primary }]}>Copy</Text>
         </Pressable>
 
-        {/* Button 3: Pay */}
+        {/* Pay Button */}
         <Pressable
           onPress={() => setPayModalVisible(true)}
           style={({ pressed }) => [
-            styles.primaryBtn,
-            styles.payBtn,
-            pressed && { opacity: 0.8 },
+            styles.actionBtn,
+            { backgroundColor: c.success, borderColor: c.success },
+            pressed && { transform: [{ scale: 0.96 }] },
           ]}
         >
           <SymbolView
             name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
-            size={16}
+            size={14}
             tintColor="#ffffff"
-            style={{ marginRight: 6 }}
           />
-          <Text style={styles.btnTextWhite}>Pay</Text>
+          <Text style={[styles.actionBtnText, { color: '#ffffff' }]}>Pay</Text>
         </Pressable>
-      </View>
+      </Animated.View>
 
-      {/* ─── Active Timer Banner (If running or has history) ──────────────────── */}
-      <Pressable
-        onPress={() => setHistoryModalVisible(true)}
-        style={[styles.timerBanner, themeStyles.cardBg]}
-      >
-        <SymbolView
-          name={{ ios: 'clock.fill', android: 'schedule', web: 'schedule' }}
-          size={18}
-          tintColor={isTimerRunning ? '#00ab55' : '#888ea8'}
-          style={{ marginRight: 8 }}
-        />
-        <Text style={[styles.timerBannerText, isTimerRunning ? styles.timerRunningText : themeStyles.textMuted]}>
-          Timer: {formatTime(elapsedSeconds)}
-        </Text>
-        <Text style={styles.timerHistoryLink}>History &gt;</Text>
-      </Pressable>
-
-      {/* ─── Appointment Basic Details Card ───────────────────────────────────── */}
-      <View style={[styles.detailsCard, themeStyles.cardBg]}>
-        <View style={styles.cardHeaderRow}>
-          <Text style={[styles.cardTitle, themeStyles.textMain]}>Appointment Info</Text>
-          <View style={[styles.badge, { backgroundColor: statusColors[appointment.status] }]}>
-            <Text style={styles.badgeText}>{statusTexts[appointment.status]}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Scheduled Time</Text>
-          <Text style={[styles.infoVal, themeStyles.textMain]}>
-            {formatDate(appointment.start, 'MMM DD, YYYY')} at {formatDate(appointment.start, 'hh:mm A')}
-          </Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>End Time</Text>
-          <Text style={[styles.infoVal, themeStyles.textMain]}>
-            {formatDate(appointment.end, 'MMM DD, YYYY')} at {formatDate(appointment.end, 'hh:mm A')}
-          </Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Assigned Techs</Text>
-          <Text style={[styles.infoVal, themeStyles.textMain]}>
-            {appointment.techs?.map((t) => t.name).join(', ') || 'Unassigned'}
-          </Text>
-        </View>
-      </View>
-
-      {/* ─── Client Details Card ──────────────────────────────────────────────── */}
-      <View style={[styles.detailsCard, themeStyles.cardBg]}>
-        <Text style={[styles.cardTitle, themeStyles.textMain]}>Client Details</Text>
-
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Name</Text>
-          <Text style={[styles.infoVal, themeStyles.textMain, styles.boldText]}>
-            {appointment.job.customer?.name || 'Unknown'}
-          </Text>
-        </View>
-
-        {appointment.job.customer?.phone && (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Phone</Text>
-            <Text style={[styles.infoVal, themeStyles.textMain]}>
-              {appointment.job.customer.phone}
+      {/* ═══ TIMER BANNER ══════════════════════════════════════════════════════ */}
+      <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ paddingHorizontal: 16 }}>
+        <Pressable
+          onPress={() => setHistoryModalVisible(true)}
+          style={({ pressed }) => [
+            styles.timerBanner,
+            {
+              backgroundColor: c.card,
+              borderColor: isTimerRunning ? c.success : c.cardBorder,
+              borderWidth: isTimerRunning ? 1.5 : 1,
+            },
+            pressed && { opacity: 0.9 },
+          ]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+            {isTimerRunning ? (
+              <PulsingDot color={c.success} />
+            ) : (
+              <SymbolView
+                name={{ ios: 'clock.fill', android: 'schedule', web: 'schedule' }}
+                size={18}
+                tintColor={c.textMuted}
+              />
+            )}
+            <Text style={[
+              styles.timerText,
+              { color: isTimerRunning ? c.success : c.textMuted, fontVariant: ['tabular-nums'] },
+            ]}>
+              {formatTime(elapsedSeconds)}
             </Text>
           </View>
-        )}
-
-        {appointment.job.customer?.email && (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Email</Text>
-            <Text style={[styles.infoVal, themeStyles.textMain]}>
-              {appointment.job.customer.email}
-            </Text>
+          <View style={[styles.timerHistoryBtn, { backgroundColor: c.primaryMuted }]}>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: c.primary }}>History</Text>
+            <SymbolView
+              name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+              size={10}
+              tintColor={c.primary}
+            />
           </View>
-        )}
+        </Pressable>
+      </Animated.View>
 
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Total Jobs</Text>
-          <Text style={[styles.infoVal, themeStyles.textMain]}>
-            {appointment.job.customer?.jobsCount ?? 0} jobs
-          </Text>
-        </View>
-      </View>
-
-      {/* ─── Job / Services Card ──────────────────────────────────────────────── */}
-      <View style={[styles.detailsCard, themeStyles.cardBg]}>
-        <Text style={[styles.cardTitle, themeStyles.textMain]}>Job Details</Text>
-
-        {appointment.job.address?.full && (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Address</Text>
-            <Text style={[styles.infoVal, themeStyles.textMain, { flex: 1.5 }]}>
-              {appointment.job.address.full}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.divider} />
-
-        <Text style={[styles.cardSubtitle, themeStyles.textMain]}>Services</Text>
-        {appointment.job.services?.length === 0 ? (
-          <Text style={[styles.noItemsText, themeStyles.textMuted]}>No services listed.</Text>
-        ) : (
-          appointment.job.services?.map((svc) => (
-            <View key={svc.id} style={styles.serviceItem}>
-              <Text style={[styles.serviceName, themeStyles.textMain]}>{svc.name}</Text>
-              <Text style={[styles.servicePrice, themeStyles.textMain]}>${parseFloat(svc.price).toFixed(2)}</Text>
+      {/* ═══ APPOINTMENT INFO CARD ═════════════════════════════════════════════ */}
+      <Animated.View entering={FadeInDown.duration(500).delay(300)} style={{ paddingHorizontal: 16, marginTop: 12 }}>
+        <View style={[styles.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+          <View style={styles.cardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={[styles.cardHeaderIcon, { backgroundColor: c.primaryMuted }]}>
+                <SymbolView
+                  name={{ ios: 'info.circle.fill', android: 'info', web: 'info' }}
+                  size={14}
+                  tintColor={c.primary}
+                />
+              </View>
+              <Text style={[styles.cardTitle, { color: c.text }]}>Appointment Info</Text>
             </View>
-          ))
-        )}
-
-        <View style={styles.divider} />
-
-        <View style={styles.totalsSummary}>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={[styles.totalVal, themeStyles.textMain]}>${appointment.job.totalAmount.toFixed(2)}</Text>
+            <View style={[styles.statusChip, { backgroundColor: currentStatus.color + '18' }]}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: currentStatus.color }} />
+              <Text style={{ fontSize: 11, fontWeight: '700', color: currentStatus.color }}>
+                {currentStatus.label}
+              </Text>
+            </View>
           </View>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabelRemaining}>Remaining Balance</Text>
-            <Text style={styles.totalValRemaining}>${appointment.job.remainingBalance.toFixed(2)}</Text>
-          </View>
+
+          <InfoRowIcon
+            icon={{ ios: 'calendar', android: 'calendar_today', web: 'calendar_today' }}
+            label="Scheduled"
+            value={`${formatDate(appointment.start, 'MMM DD, YYYY')} at ${formatDate(appointment.start, 'hh:mm A')}`}
+            isDark={isDark}
+          />
+
+          <View style={[styles.divider, { backgroundColor: c.divider }]} />
+
+          <InfoRowIcon
+            icon={{ ios: 'clock', android: 'schedule', web: 'schedule' }}
+            label="End Time"
+            value={`${formatDate(appointment.end, 'MMM DD, YYYY')} at ${formatDate(appointment.end, 'hh:mm A')}`}
+            isDark={isDark}
+          />
+
+          <View style={[styles.divider, { backgroundColor: c.divider }]} />
+
+          <InfoRowIcon
+            icon={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
+            label="Assigned Techs"
+            value={appointment.techs?.map((t) => t.name).join(', ') || 'Unassigned'}
+            isDark={isDark}
+          />
         </View>
-      </View>
+      </Animated.View>
 
-      {/* ─── MODAL 1: Create Copy Dialog ──────────────────────────────────────── */}
+      {/* ═══ CLIENT DETAILS CARD ═══════════════════════════════════════════════ */}
+      <Animated.View entering={FadeInDown.duration(500).delay(400)} style={{ paddingHorizontal: 16, marginTop: 12 }}>
+        <View style={[styles.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+          <View style={styles.cardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={[styles.cardHeaderIcon, { backgroundColor: c.primaryMuted }]}>
+                <SymbolView
+                  name={{ ios: 'person.fill', android: 'person', web: 'person' }}
+                  size={14}
+                  tintColor={c.primary}
+                />
+              </View>
+              <Text style={[styles.cardTitle, { color: c.text }]}>Client</Text>
+            </View>
+          </View>
+
+          {/* Client profile row */}
+          <View style={styles.clientProfileRow}>
+            <AvatarInitials name={customerName} size={48} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: c.text }}>{customerName}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={[styles.miniChip, { backgroundColor: c.primaryMuted }]}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: c.primary }}>
+                    {appointment.job.customer?.jobsCount ?? 0} jobs
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Contact chips */}
+          {appointment.job.customer?.phone && (
+            <View style={[styles.contactChip, { backgroundColor: c.inputBg }]}>
+              <SymbolView
+                name={{ ios: 'phone.fill', android: 'phone', web: 'phone' }}
+                size={14}
+                tintColor={c.primary}
+              />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: c.text }}>
+                {appointment.job.customer.phone}
+              </Text>
+            </View>
+          )}
+
+          {appointment.job.customer?.email && (
+            <View style={[styles.contactChip, { backgroundColor: c.inputBg }]}>
+              <SymbolView
+                name={{ ios: 'envelope.fill', android: 'email', web: 'email' }}
+                size={14}
+                tintColor={c.primary}
+              />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: c.text }}>
+                {appointment.job.customer.email}
+              </Text>
+            </View>
+          )}
+        </View>
+      </Animated.View>
+
+      {/* ═══ JOB / SERVICES CARD ══════════════════════════════════════════════ */}
+      <Animated.View entering={FadeInDown.duration(500).delay(500)} style={{ paddingHorizontal: 16, marginTop: 12 }}>
+        <View style={[styles.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+          <View style={styles.cardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={[styles.cardHeaderIcon, { backgroundColor: c.successMuted }]}>
+                <SymbolView
+                  name={{ ios: 'wrench.and.screwdriver.fill', android: 'build', web: 'build' }}
+                  size={14}
+                  tintColor={c.success}
+                />
+              </View>
+              <Text style={[styles.cardTitle, { color: c.text }]}>Services</Text>
+            </View>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: c.textMuted }}>
+              {appointment.job.services?.length || 0} items
+            </Text>
+          </View>
+
+          {/* Services list */}
+          {appointment.job.services?.length === 0 ? (
+            <Text style={{ fontSize: 13, fontStyle: 'italic', color: c.textMuted, paddingVertical: 8 }}>
+              No services listed.
+            </Text>
+          ) : (
+            appointment.job.services?.map((svc, idx) => (
+              <View
+                key={svc.id}
+                style={[
+                  styles.serviceItem,
+                  {
+                    backgroundColor: idx % 2 === 0 ? c.inputBg : 'transparent',
+                  },
+                ]}
+              >
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: c.text }}>{svc.name}</Text>
+                </View>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: c.text }}>
+                  ${parseFloat(svc.price).toFixed(2)}
+                </Text>
+              </View>
+            ))
+          )}
+
+          <View style={[styles.divider, { backgroundColor: c.divider, marginTop: 4 }]} />
+
+          {/* Totals */}
+          <View style={styles.totalsBlock}>
+            <View style={styles.totalRow}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: c.textMuted }}>Total</Text>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: c.text }}>
+                ${appointment.job.totalAmount.toFixed(2)}
+              </Text>
+            </View>
+          </View>
+
+          {/* Payment Progress */}
+          <PaymentProgressBar
+            total={appointment.job.totalAmount}
+            remaining={appointment.job.remainingBalance}
+            isDark={isDark}
+          />
+        </View>
+      </Animated.View>
+
+      {/* ═══ MODAL 1: Create Copy ═════════════════════════════════════════════ */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -715,83 +1163,137 @@ export default function AppointmentDetailsScreen() {
         onRequestClose={() => setCopyModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, themeStyles.cardBg]}>
+          <View style={[styles.modalCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
+            {/* Drag Handle */}
+            <View style={styles.dragHandle} />
+
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, themeStyles.textMain]}>New Appointment Copy</Text>
-              <Pressable onPress={() => setCopyModalVisible(false)} hitSlop={15}>
-                <Text style={styles.closeModalCross}>×</Text>
+              <Text style={[styles.modalTitle, { color: c.text }]}>New Appointment</Text>
+              <Pressable
+                onPress={() => setCopyModalVisible(false)}
+                hitSlop={15}
+                style={({ pressed }) => [styles.modalCloseBtn, { backgroundColor: c.inputBg }, pressed && { opacity: 0.7 }]}
+              >
+                <SymbolView
+                  name={{ ios: 'xmark', android: 'close', web: 'close' }}
+                  size={14}
+                  tintColor={c.textMuted}
+                />
               </Pressable>
             </View>
 
-            {/* Tactile Date / Time Steppers */}
-            <View style={styles.stepperContainer}>
-              <Text style={[styles.stepperSectionTitle, themeStyles.textMain]}>Date Select</Text>
-              <View style={styles.stepperRow}>
-                <Pressable onPress={() => changeCopyDay(-1)} style={styles.stepperBtn}>
-                  <Text style={styles.stepperBtnText}>-1 Day</Text>
-                </Pressable>
-                <Text style={[styles.stepperValText, themeStyles.textMain]}>
-                  {formatDate(copyDate, 'MMM DD, YYYY')}
-                </Text>
-                <Pressable onPress={() => changeCopyDay(1)} style={styles.stepperBtn}>
-                  <Text style={styles.stepperBtnText}>+1 Day</Text>
-                </Pressable>
+            {/* Date Stepper */}
+            <View style={{ gap: 16 }}>
+              <View style={{ gap: 6 }}>
+                <Text style={[styles.stepperLabel, { color: c.textMuted }]}>Date</Text>
+                <View style={[styles.stepperRow, { backgroundColor: c.inputBg }]}>
+                  <Pressable
+                    onPress={() => changeCopyDay(-1)}
+                    style={({ pressed }) => [styles.stepperBtn, { backgroundColor: c.primary }, pressed && { opacity: 0.8 }]}
+                  >
+                    <Text style={styles.stepperBtnText}>−</Text>
+                  </Pressable>
+                  <Text style={[styles.stepperValText, { color: c.text }]}>
+                    {formatDate(copyDate, 'MMM DD, YYYY')}
+                  </Text>
+                  <Pressable
+                    onPress={() => changeCopyDay(1)}
+                    style={({ pressed }) => [styles.stepperBtn, { backgroundColor: c.primary }, pressed && { opacity: 0.8 }]}
+                  >
+                    <Text style={styles.stepperBtnText}>+</Text>
+                  </Pressable>
+                </View>
               </View>
 
-              <Text style={[styles.stepperSectionTitle, themeStyles.textMain, { marginTop: 12 }]}>Time Select</Text>
-              <View style={styles.stepperRow}>
-                <Pressable onPress={() => changeCopyHour(-1)} style={styles.stepperBtn}>
-                  <Text style={styles.stepperBtnText}>-1 Hour</Text>
-                </Pressable>
-                <Text style={[styles.stepperValText, themeStyles.textMain]}>
-                  {formatDate(copyDate, 'hh:00 A')}
-                </Text>
-                <Pressable onPress={() => changeCopyHour(1)} style={styles.stepperBtn}>
-                  <Text style={styles.stepperBtnText}>+1 Hour</Text>
-                </Pressable>
+              <View style={{ gap: 6 }}>
+                <Text style={[styles.stepperLabel, { color: c.textMuted }]}>Time</Text>
+                <View style={[styles.stepperRow, { backgroundColor: c.inputBg }]}>
+                  <Pressable
+                    onPress={() => changeCopyHour(-1)}
+                    style={({ pressed }) => [styles.stepperBtn, { backgroundColor: c.primary }, pressed && { opacity: 0.8 }]}
+                  >
+                    <Text style={styles.stepperBtnText}>−</Text>
+                  </Pressable>
+                  <Text style={[styles.stepperValText, { color: c.text }]}>
+                    {formatDate(copyDate, 'hh:00 A')}
+                  </Text>
+                  <Pressable
+                    onPress={() => changeCopyHour(1)}
+                    style={({ pressed }) => [styles.stepperBtn, { backgroundColor: c.primary }, pressed && { opacity: 0.8 }]}
+                  >
+                    <Text style={styles.stepperBtnText}>+</Text>
+                  </Pressable>
+                </View>
               </View>
 
-              <Text style={[styles.stepperSectionTitle, themeStyles.textMain, { marginTop: 12 }]}>Duration</Text>
-              <View style={styles.stepperRow}>
-                <Pressable onPress={() => setCopyDurationHours(h => Math.max(1, h - 1))} style={styles.stepperBtn}>
-                  <Text style={styles.stepperBtnText}>-1 Hr</Text>
-                </Pressable>
-                <Text style={[styles.stepperValText, themeStyles.textMain]}>
-                  {copyDurationHours} Hour{copyDurationHours > 1 ? 's' : ''}
-                </Text>
-                <Pressable onPress={() => setCopyDurationHours(h => h + 1)} style={styles.stepperBtn}>
-                  <Text style={styles.stepperBtnText}>+1 Hr</Text>
-                </Pressable>
+              <View style={{ gap: 6 }}>
+                <Text style={[styles.stepperLabel, { color: c.textMuted }]}>Duration</Text>
+                <View style={[styles.stepperRow, { backgroundColor: c.inputBg }]}>
+                  <Pressable
+                    onPress={() => setCopyDurationHours(h => Math.max(1, h - 1))}
+                    style={({ pressed }) => [styles.stepperBtn, { backgroundColor: c.primary }, pressed && { opacity: 0.8 }]}
+                  >
+                    <Text style={styles.stepperBtnText}>−</Text>
+                  </Pressable>
+                  <Text style={[styles.stepperValText, { color: c.text }]}>
+                    {copyDurationHours} Hour{copyDurationHours > 1 ? 's' : ''}
+                  </Text>
+                  <Pressable
+                    onPress={() => setCopyDurationHours(h => h + 1)}
+                    style={({ pressed }) => [styles.stepperBtn, { backgroundColor: c.primary }, pressed && { opacity: 0.8 }]}
+                  >
+                    <Text style={styles.stepperBtnText}>+</Text>
+                  </Pressable>
+                </View>
               </View>
             </View>
 
-            {/* Checkbox */}
+            {/* Toggle */}
             <Pressable
               onPress={() => setIsFinishCurrentAppointment(p => !p)}
-              style={styles.checkboxRow}
+              style={styles.toggleRow}
             >
-              <View style={[styles.checkboxSquare, isFinishCurrentAppointment && styles.checkboxSquareChecked]}>
-                {isFinishCurrentAppointment && <Text style={styles.checkmarkIcon}>✓</Text>}
+              <View
+                style={[
+                  styles.toggleTrack,
+                  { backgroundColor: isFinishCurrentAppointment ? c.primary : c.inputBg },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.toggleThumb,
+                    { transform: [{ translateX: isFinishCurrentAppointment ? 18 : 2 }] },
+                  ]}
+                />
               </View>
-              <Text style={[styles.checkboxLabel, themeStyles.textMuted]}>Finish current appointment</Text>
+              <Text style={[styles.toggleLabel, { color: c.textSecondary }]}>Finish current appointment</Text>
             </Pressable>
 
-            <View style={styles.modalActionButtons}>
+            {/* Actions */}
+            <View style={styles.modalActions}>
               <Pressable
                 onPress={() => setCopyModalVisible(false)}
-                style={[styles.modalBtn, styles.modalDiscardBtn]}
+                style={({ pressed }) => [
+                  styles.modalActionBtn,
+                  { backgroundColor: c.inputBg },
+                  pressed && { opacity: 0.8 },
+                ]}
               >
-                <Text style={styles.discardBtnText}>Discard</Text>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: c.textMuted }}>Cancel</Text>
               </Pressable>
               <Pressable
                 onPress={handleCreateCopy}
-                style={[styles.modalBtn, styles.modalSubmitBtn]}
                 disabled={copyLoading}
+                style={({ pressed }) => [
+                  styles.modalActionBtn,
+                  { backgroundColor: c.primary, flex: 1.5 },
+                  pressed && { opacity: 0.85 },
+                ]}
               >
                 {copyLoading ? (
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
-                  <Text style={styles.submitBtnText}>Create</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff' }}>Create</Text>
                 )}
               </Pressable>
             </View>
@@ -799,7 +1301,7 @@ export default function AppointmentDetailsScreen() {
         </View>
       </Modal>
 
-      {/* ─── MODAL 2: Payment Drawer ─────────────────────────────────────────── */}
+      {/* ═══ MODAL 2: Payment ═════════════════════════════════════════════════ */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -807,49 +1309,77 @@ export default function AppointmentDetailsScreen() {
         onRequestClose={() => setPayModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, themeStyles.cardBg, { maxHeight: '90%' }]}>
+          <View style={[styles.modalCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', maxHeight: '90%' }]}>
+            {/* Drag Handle */}
+            <View style={styles.dragHandle} />
+
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, themeStyles.textMain]}>Collect Payment</Text>
-              <Pressable onPress={() => setPayModalVisible(false)} hitSlop={15}>
-                <Text style={styles.closeModalCross}>×</Text>
+              <Text style={[styles.modalTitle, { color: c.text }]}>Collect Payment</Text>
+              <Pressable
+                onPress={() => setPayModalVisible(false)}
+                hitSlop={15}
+                style={({ pressed }) => [styles.modalCloseBtn, { backgroundColor: c.inputBg }, pressed && { opacity: 0.7 }]}
+              >
+                <SymbolView
+                  name={{ ios: 'xmark', android: 'close', web: 'close' }}
+                  size={14}
+                  tintColor={c.textMuted}
+                />
               </Pressable>
             </View>
 
             <ScrollView contentContainerStyle={{ paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
-              <View style={styles.paymentsBalanceRow}>
-                <Text style={styles.balDanger}>Remaining: ${appointment.job.remainingBalance.toFixed(2)}</Text>
-                <Text style={styles.balSuccess}>Total: ${appointment.job.totalAmount.toFixed(2)}</Text>
+              {/* Balance summary */}
+              <View style={styles.payBalanceRow}>
+                <View style={[styles.payBalanceChip, { backgroundColor: c.dangerMuted }]}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: c.danger }}>
+                    Due: ${appointment.job.remainingBalance.toFixed(2)}
+                  </Text>
+                </View>
+                <View style={[styles.payBalanceChip, { backgroundColor: c.successMuted }]}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: c.success }}>
+                    Total: ${appointment.job.totalAmount.toFixed(2)}
+                  </Text>
+                </View>
               </View>
 
-              {/* Amount input */}
-              <View style={styles.paymentInputBlock}>
-                <Text style={[styles.currencyLabel, themeStyles.textMain]}>$</Text>
+              {/* Amount Input */}
+              <View style={[styles.payInputBlock, { borderBottomColor: c.primary }]}>
+                <Text style={{ fontSize: 36, fontWeight: '800', color: c.primary }}>$</Text>
                 <TextInput
-                  style={[styles.payValInput, themeStyles.textMain]}
+                  style={[styles.payAmountInput, { color: c.text }]}
                   keyboardType="numeric"
                   value={payAmount}
                   onChangeText={setPayAmount}
                 />
               </View>
 
-              {/* Quick Select Buttons */}
-              <View style={styles.quickPayBtns}>
+              {/* Quick Select */}
+              <View style={styles.quickPayRow}>
                 <Pressable
                   onPress={() => setPayAmount('100')}
-                  style={[styles.quickPayBtn, themeStyles.btnBorder]}
+                  style={({ pressed }) => [
+                    styles.quickPayChip,
+                    { backgroundColor: c.primaryMuted, borderColor: c.primary },
+                    pressed && { opacity: 0.8 },
+                  ]}
                 >
-                  <Text style={[styles.quickPayText, themeStyles.textPrimary]}>Deposit ($100)</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: c.primary }}>Deposit $100</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => setPayAmount(appointment.job.remainingBalance.toString())}
-                  style={[styles.quickPayBtn, themeStyles.btnBorder]}
+                  style={({ pressed }) => [
+                    styles.quickPayChip,
+                    { backgroundColor: c.successMuted, borderColor: c.success },
+                    pressed && { opacity: 0.8 },
+                  ]}
                 >
-                  <Text style={[styles.quickPayText, themeStyles.textPrimary]}>Full Amount</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: c.success }}>Full Amount</Text>
                 </Pressable>
               </View>
 
-              {/* Payment Methods switcher */}
-              <View style={styles.methodSelector}>
+              {/* Payment Method Selector */}
+              <View style={[styles.methodSelector, { backgroundColor: c.inputBg }]}>
                 {[
                   { id: 1, name: 'Credit' },
                   { id: 2, name: 'Cash' },
@@ -862,11 +1392,17 @@ export default function AppointmentDetailsScreen() {
                       key={type.id}
                       onPress={() => setSelectedPaymentType(type.id)}
                       style={[
-                        styles.methodTabButton,
-                        isSel ? styles.methodTabActive : themeStyles.btnBorder,
+                        styles.methodTab,
+                        isSel && { backgroundColor: c.primary },
                       ]}
                     >
-                      <Text style={[styles.methodTabText, isSel ? styles.methodTabTextActive : themeStyles.textMuted]}>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: '700',
+                          color: isSel ? '#ffffff' : c.textMuted,
+                        }}
+                      >
                         {type.name}
                       </Text>
                     </Pressable>
@@ -874,17 +1410,17 @@ export default function AppointmentDetailsScreen() {
                 })}
               </View>
 
-              {/* Credit card customer signature canvas */}
+              {/* Credit card signature */}
               {selectedPaymentType === 1 && (
-                <View style={styles.sigContainer}>
-                  <View style={styles.sigHeader}>
-                    <Text style={[styles.sigLabel, themeStyles.textMain]}>Customer Signature</Text>
-                    <Pressable onPress={() => setAllSignatureLines([])} style={styles.clearSigBtn}>
-                      <Text style={styles.clearSigText}>Clear</Text>
+                <View style={{ gap: 8, marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: c.text }}>Customer Signature</Text>
+                    <Pressable onPress={() => setAllSignatureLines([])} style={{ paddingVertical: 2, paddingHorizontal: 8 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: c.danger }}>Clear</Text>
                     </Pressable>
                   </View>
                   <View
-                    style={styles.sigDrawingBox}
+                    style={[styles.sigBox, { borderColor: c.cardBorder }]}
                     onStartShouldSetResponder={() => true}
                     onMoveShouldSetResponder={() => true}
                     onResponderGrant={onSignatureTouchStart}
@@ -894,41 +1430,58 @@ export default function AppointmentDetailsScreen() {
                     {renderSignatureVectors()}
                     {allSignatureLines.length === 0 && currentSignatureLine.length === 0 && (
                       <View style={styles.sigPlaceholder} pointerEvents="none">
-                        <Text style={styles.sigPlaceholderText}>Draw signature here</Text>
+                        <Text style={{ color: c.textMuted, fontSize: 12, fontStyle: 'italic' }}>
+                          Draw signature here
+                        </Text>
                       </View>
                     )}
                   </View>
                 </View>
               )}
 
-              {/* Checkbox Invoice */}
-              <Pressable
-                onPress={() => setSendInvoice(p => !p)}
-                style={styles.checkboxRow}
-              >
-                <View style={[styles.checkboxSquare, sendInvoice && styles.checkboxSquareChecked]}>
-                  {sendInvoice && <Text style={styles.checkmarkIcon}>✓</Text>}
+              {/* Invoice Toggle */}
+              <Pressable onPress={() => setSendInvoice(p => !p)} style={styles.toggleRow}>
+                <View
+                  style={[
+                    styles.toggleTrack,
+                    { backgroundColor: sendInvoice ? c.primary : c.inputBg },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.toggleThumb,
+                      { transform: [{ translateX: sendInvoice ? 18 : 2 }] },
+                    ]}
+                  />
                 </View>
-                <Text style={[styles.checkboxLabel, themeStyles.textMuted]}>Send invoice automatically</Text>
+                <Text style={[styles.toggleLabel, { color: c.textSecondary }]}>Send invoice automatically</Text>
               </Pressable>
             </ScrollView>
 
-            <View style={styles.modalActionButtons}>
+            <View style={styles.modalActions}>
               <Pressable
                 onPress={() => setPayModalVisible(false)}
-                style={[styles.modalBtn, styles.modalDiscardBtn]}
+                style={({ pressed }) => [
+                  styles.modalActionBtn,
+                  { backgroundColor: c.inputBg },
+                  pressed && { opacity: 0.8 },
+                ]}
               >
-                <Text style={styles.discardBtnText}>Discard</Text>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: c.textMuted }}>Cancel</Text>
               </Pressable>
               <Pressable
                 onPress={handleAddPayment}
-                style={[styles.modalBtn, styles.modalSubmitBtn]}
                 disabled={payLoading}
+                style={({ pressed }) => [
+                  styles.modalActionBtn,
+                  { backgroundColor: c.success, flex: 1.5 },
+                  pressed && { opacity: 0.85 },
+                ]}
               >
                 {payLoading ? (
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
-                  <Text style={styles.submitBtnText}>Pay Now</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff' }}>Pay Now</Text>
                 )}
               </Pressable>
             </View>
@@ -936,7 +1489,7 @@ export default function AppointmentDetailsScreen() {
         </View>
       </Modal>
 
-      {/* ─── MODAL 3: Timer History ─────────────────────────────────────────── */}
+      {/* ═══ MODAL 3: Timer History ═══════════════════════════════════════════ */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -944,37 +1497,77 @@ export default function AppointmentDetailsScreen() {
         onRequestClose={() => setHistoryModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, themeStyles.cardBg, { maxHeight: '80%' }]}>
+          <View style={[styles.modalCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', maxHeight: '80%' }]}>
+            {/* Drag Handle */}
+            <View style={styles.dragHandle} />
+
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, themeStyles.textMain]}>Timer History</Text>
-              <Pressable onPress={() => setHistoryModalVisible(false)} hitSlop={15}>
-                <Text style={styles.closeModalCross}>×</Text>
+              <Text style={[styles.modalTitle, { color: c.text }]}>Timer History</Text>
+              <Pressable
+                onPress={() => setHistoryModalVisible(false)}
+                hitSlop={15}
+                style={({ pressed }) => [styles.modalCloseBtn, { backgroundColor: c.inputBg }, pressed && { opacity: 0.7 }]}
+              >
+                <SymbolView
+                  name={{ ios: 'xmark', android: 'close', web: 'close' }}
+                  size={14}
+                  tintColor={c.textMuted}
+                />
               </Pressable>
             </View>
 
-            <ScrollView contentContainerStyle={{ paddingVertical: 10 }} showsVerticalScrollIndicator={false}>
+            {/* Total elapsed */}
+            <View style={[styles.timerTotalBanner, { backgroundColor: c.primaryMuted }]}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: c.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Total Time
+              </Text>
+              <Text style={{ fontSize: 28, fontWeight: '800', color: c.primary, fontVariant: ['tabular-nums'] }}>
+                {formatTime(elapsedSeconds)}
+              </Text>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingVertical: 8, gap: 8 }} showsVerticalScrollIndicator={false}>
               {appointment.timers?.length === 0 ? (
-                <Text style={[styles.noTimersText, themeStyles.textMuted]}>No timer records found.</Text>
+                <Text style={{ textAlign: 'center', fontSize: 13, fontStyle: 'italic', color: c.textMuted, paddingVertical: 20 }}>
+                  No timer records found.
+                </Text>
               ) : (
                 appointment.timers?.map((t, idx) => {
                   const startMs = Date.parse(t.started_at);
                   const stopMs = t.stopped_at ? Date.parse(t.stopped_at) : Date.now();
                   const durationSecs = isNaN(startMs) ? 0 : Math.floor((stopMs - startMs) / 1000);
+                  const isActive = !t.stopped_at;
 
                   return (
-                    <View key={t.id || idx} style={[styles.timerItem, themeStyles.timerItemBg]}>
-                      <View>
-                        <Text style={[styles.timerItemDate, themeStyles.textMain]}>
-                          {formatDate(t.started_at, 'MMM DD, hh:mm A')} - {t.stopped_at ? formatDate(t.stopped_at, 'hh:mm A') : 'Running'}
+                    <View
+                      key={t.id || idx}
+                      style={[
+                        styles.timerHistoryItem,
+                        {
+                          backgroundColor: c.timerItemBg,
+                          borderLeftColor: isActive ? c.success : c.primary,
+                        },
+                      ]}
+                    >
+                      <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: c.text }}>
+                          {formatDate(t.started_at, 'MMM DD, hh:mm A')} — {t.stopped_at ? formatDate(t.stopped_at, 'hh:mm A') : 'Running'}
                         </Text>
-                        <Text style={[styles.timerItemActors, themeStyles.textMuted]}>
+                        <Text style={{ fontSize: 11, fontWeight: '500', color: c.textMuted }}>
                           Started by: {t.started_by?.name || 'Unknown'}
-                          {t.stopped_by?.name && ` • Stopped by: ${t.stopped_by.name}`}
+                          {t.stopped_by?.name && ` · Stopped by: ${t.stopped_by.name}`}
                         </Text>
                       </View>
-                      <Text style={[styles.timerDurationText, themeStyles.textPrimary]}>
-                        {formatTimerText(durationSecs)}
-                      </Text>
+                      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                        <Text style={{ fontSize: 15, fontWeight: '800', color: isActive ? c.success : c.primary, fontVariant: ['tabular-nums'] }}>
+                          {formatTimerText(durationSecs)}
+                        </Text>
+                        {isActive && (
+                          <View style={[styles.miniChip, { backgroundColor: c.successMuted }]}>
+                            <Text style={{ fontSize: 9, fontWeight: '700', color: c.success }}>LIVE</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
                   );
                 })
@@ -983,9 +1576,13 @@ export default function AppointmentDetailsScreen() {
 
             <Pressable
               onPress={() => setHistoryModalVisible(false)}
-              style={[styles.closeButton, themeStyles.closeButton, { marginTop: 12 }]}
+              style={({ pressed }) => [
+                styles.modalActionBtn,
+                { backgroundColor: c.primary, marginTop: 12 },
+                pressed && { opacity: 0.85 },
+              ]}
             >
-              <Text style={styles.closeButtonText}>Close</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff' }}>Close</Text>
             </Pressable>
           </View>
         </View>
@@ -994,7 +1591,10 @@ export default function AppointmentDetailsScreen() {
   );
 }
 
-// Convert seconds to readable timer format
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
 const formatTime = (totalSeconds: number) => {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -1002,422 +1602,433 @@ const formatTime = (totalSeconds: number) => {
   return `${h > 0 ? h.toString().padStart(2, '0') + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── Styles ───────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    gap: 16,
-  },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    fontWeight: '600',
+
+  // ─── Hero ─────────────────────────────────────────────────────────
+  heroSection: {
+    paddingTop: 60,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    gap: 8,
   },
-  errorText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#e7515a',
-    textAlign: 'center',
-    marginBottom: 20,
+  heroBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
-  retryBtn: {
-    borderWidth: 1.5,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-  },
-  retryText: {
-    fontSize: 14,
+  heroJobId: {
+    fontSize: 12,
     fontWeight: '700',
+    color: 'rgba(255,255,255,0.7)',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
   },
-  // action toolbar
-  actionToolbar: {
+  heroStatusBadge: {
     flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'space-between',
-  },
-  statusGroup: {
-    flex: 1.5,
-    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     gap: 6,
   },
-  primaryBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 8,
+  heroStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#ffffff',
+  },
+  heroStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  heroCustomerName: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#ffffff',
+    marginTop: 4,
+  },
+  heroAddressRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 10,
+    marginTop: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 12,
+    paddingVertical: 10,
     paddingHorizontal: 12,
   },
-  timerBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
+  heroAddressIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  payBtn: {
-    backgroundColor: '#00ab55',
-  },
-  btnTextWhite: {
+  heroAddressText: {
+    fontSize: 15,
+    fontWeight: '600',
     color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  btnTextSecondary: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  timerBanner: {
-    flexDirection: 'row',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  timerBannerText: {
-    fontSize: 14,
-    fontWeight: '700',
     flex: 1,
   },
-  timerRunningText: {
-    color: '#00ab55',
+  heroCopyBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  timerHistoryLink: {
-    color: '#4361ee',
+  heroTimeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    flexWrap: 'wrap',
+  },
+  heroTimePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  heroTimeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+  },
+
+  // ─── Action Row ───────────────────────────────────────────────────
+  actionRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  actionBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+  },
+  actionBtnCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+  },
+  actionBtnText: {
     fontSize: 12,
     fontWeight: '700',
   },
-  // cards
-  detailsCard: {
-    padding: 16,
-    borderRadius: 12,
+
+  // ─── Timer Banner ─────────────────────────────────────────────────
+  timerBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'transparent',
+  },
+  timerText: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  timerHistoryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+
+  // ─── Cards ────────────────────────────────────────────────────────
+  card: {
+    padding: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
     elevation: 3,
-    gap: 12,
   },
-  cardHeaderRow: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(128,128,128,0.15)',
-    paddingBottom: 8,
+    borderBottomColor: 'rgba(128,128,128,0.08)',
+    marginBottom: 6,
+  },
+  cardHeaderIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardTitle: {
     fontSize: 15,
     fontWeight: '800',
   },
-  cardSubtitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  infoRow: {
+  statusChip: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  infoLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#888ea8',
-  },
-  infoVal: {
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'right',
-  },
-  boldText: {
-    fontWeight: '800',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(128,128,128,0.15)',
-    marginVertical: 4,
+    marginVertical: 2,
   },
+
+  // ─── Client ───────────────────────────────────────────────────────
+  clientProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 8,
+  },
+  miniChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  contactChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+
+  // ─── Services ─────────────────────────────────────────────────────
   serviceItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
   },
-  serviceName: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  servicePrice: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  noItemsText: {
-    fontSize: 13,
-    fontStyle: 'italic',
-  },
-  totalsSummary: {
+  totalsBlock: {
     gap: 6,
+    paddingTop: 4,
   },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  totalLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#888ea8',
-  },
-  totalVal: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  totalLabelRemaining: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#e7515a',
-  },
-  totalValRemaining: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#e7515a',
-  },
-  // modals
+
+  // ─── Modals ───────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    justifyContent: 'flex-end',
   },
   modalCard: {
-    width: '100%',
-    maxWidth: 340,
-    borderRadius: 12,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 20,
+    paddingTop: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 15,
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(128,128,128,0.3)',
+    alignSelf: 'center',
+    marginBottom: 12,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(128,128,128,0.15)',
-    paddingBottom: 8,
+    marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
   },
-  closeModalCross: {
-    fontSize: 24,
-    fontWeight: '300',
-    color: '#888ea8',
-    lineHeight: 24,
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  // steppers
-  stepperContainer: {
-    gap: 8,
-    marginBottom: 16,
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
   },
-  stepperSectionTitle: {
-    fontSize: 12,
+  modalActionBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ─── Steppers ─────────────────────────────────────────────────────
+  stepperLabel: {
+    fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
-    color: '#888ea8',
+    letterSpacing: 0.5,
   },
   stepperRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(128,128,128,0.06)',
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 4,
   },
   stepperBtn: {
-    backgroundColor: 'rgba(128,128,128,0.15)',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stepperBtnText: {
-    fontSize: 11,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#3b3f5c',
+    color: '#ffffff',
   },
   stepperValText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
   },
-  // checkbox
-  checkboxRow: {
+
+  // ─── Toggle ───────────────────────────────────────────────────────
+  toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginVertical: 12,
+    gap: 10,
+    marginVertical: 14,
   },
-  checkboxSquare: {
+  toggleTrack: {
+    width: 42,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+  },
+  toggleThumb: {
     width: 20,
     height: 20,
-    borderWidth: 1.5,
-    borderColor: '#888ea8',
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  checkboxSquareChecked: {
-    borderColor: '#4361ee',
-    backgroundColor: '#4361ee',
-  },
-  checkmarkIcon: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 14,
-  },
-  checkboxLabel: {
+  toggleLabel: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '600',
+    flex: 1,
   },
-  // payments modal specifics
-  paymentsBalanceRow: {
+
+  // ─── Payment Modal ────────────────────────────────────────────────
+  payBalanceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 20,
+    gap: 8,
   },
-  balDanger: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#e7515a',
+  payBalanceChip: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    alignItems: 'center',
   },
-  balSuccess: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#00ab55',
-  },
-  paymentInputBlock: {
+  payInputBlock: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 1.5,
-    borderBottomColor: '#888ea8',
+    borderBottomWidth: 2,
     paddingVertical: 8,
     marginBottom: 16,
   },
-  currencyLabel: {
-    fontSize: 32,
+  payAmountInput: {
+    fontSize: 36,
     fontWeight: '800',
-    marginRight: 4,
-  },
-  payValInput: {
-    fontSize: 32,
-    fontWeight: '800',
-    width: 150,
+    width: 160,
     textAlign: 'center',
     padding: 0,
   },
-  quickPayBtns: {
+  quickPayRow: {
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  quickPayBtn: {
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  quickPayText: {
-    fontSize: 11,
-    fontWeight: '700',
+  quickPayChip: {
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
   },
   methodSelector: {
     flexDirection: 'row',
-    borderRadius: 8,
-    backgroundColor: 'rgba(128,128,128,0.06)',
+    borderRadius: 12,
     padding: 4,
     marginBottom: 16,
   },
-  methodTabButton: {
+  methodTab: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  methodTabActive: {
-    backgroundColor: '#4361ee',
-  },
-  methodTabText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  methodTabTextActive: {
-    color: '#ffffff',
-  },
-  sigContainer: {
-    gap: 8,
-    marginBottom: 16,
-  },
-  sigHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sigLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  clearSigBtn: {
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-  },
-  clearSigText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#e7515a',
-  },
-  sigDrawingBox: {
+  sigBox: {
     height: 120,
     backgroundColor: '#ffffff',
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e6ed',
     position: 'relative',
     overflow: 'hidden',
   },
@@ -1430,140 +2041,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sigPlaceholderText: {
-    color: '#888ea8',
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
-  modalActionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
-  },
-  modalBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 8,
+
+  // ─── Timer History Modal ──────────────────────────────────────────
+  timerTotalBanner: {
     alignItems: 'center',
-    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 14,
+    marginBottom: 12,
+    gap: 4,
   },
-  modalDiscardBtn: {
-    borderWidth: 1,
-    borderColor: '#e7515a',
-    backgroundColor: 'transparent',
-  },
-  modalSubmitBtn: {
-    backgroundColor: '#4361ee',
-  },
-  discardBtnText: {
-    color: '#e7515a',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  submitBtnText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  // timer history modal specifics
-  noTimersText: {
-    textAlign: 'center',
-    fontSize: 13,
-    fontStyle: 'italic',
-    paddingVertical: 20,
-  },
-  timerItem: {
+  timerHistoryItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 4,
-  },
-  timerItemDate: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  timerItemActors: {
-    fontSize: 10,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  timerDurationText: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  closeButton: {
-    height: 40,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeButtonText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-});
-
-const lightStyles = StyleSheet.create({
-  bg: {
-    backgroundColor: '#f6f8fa',
-  },
-  cardBg: {
-    backgroundColor: '#ffffff',
-    borderColor: '#e0e6ed',
-  },
-  textMain: {
-    color: '#0e1726',
-  },
-  textMuted: {
-    color: '#515365',
-  },
-  textPrimary: {
-    color: '#4361ee',
-  },
-  btnBgSec: {
-    backgroundColor: '#f1f2f3',
-  },
-  btnBorder: {
-    borderColor: '#e0e6ed',
-  },
-  closeButton: {
-    backgroundColor: '#4361ee',
-  },
-  timerItemBg: {
-    backgroundColor: '#f1f2f3',
-  },
-});
-
-const darkStyles = StyleSheet.create({
-  bg: {
-    backgroundColor: '#060818',
-  },
-  cardBg: {
-    backgroundColor: '#0e1726',
-    borderColor: '#191e3a',
-  },
-  textMain: {
-    color: '#f1f2f3',
-  },
-  textMuted: {
-    color: '#888ea8',
-  },
-  textPrimary: {
-    color: '#805dca',
-  },
-  btnBgSec: {
-    backgroundColor: '#1b2e4b',
-  },
-  btnBorder: {
-    borderColor: '#191e3a',
-  },
-  closeButton: {
-    backgroundColor: '#805dca',
-  },
-  timerItemBg: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    padding: 14,
+    borderRadius: 12,
+    borderLeftWidth: 3,
   },
 });

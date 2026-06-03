@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useLayoutEffect, useMemo } from 'react';
-import { StyleSheet, View, useWindowDimensions, ScrollView, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { StyleSheet, View, useWindowDimensions, ScrollView, RefreshControl, Animated, PanResponder } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import { AppointmentsSchedulerProps, CalendarEvent, ITile, ViewType } from './types';
 import { calculateViewDateTimes, getDaysArray, getTimesArray, getEventTiles } from './utils/helper';
 import ListView from './components/ListView';
@@ -8,6 +9,9 @@ import DaysRow from './components/DaysRow';
 import TimesCol from './components/TimesCol';
 import SchedulerHeader from './components/SchedulerHeader';
 import { useColorScheme } from '@/components/useColorScheme';
+
+const VIEW_TYPE_STORAGE_KEY = 'scheduler_view_type';
+const VALID_VIEW_TYPES: ViewType[] = ['week', 'day', 'list'];
 
 export default function AppointmentsScheduler<T extends any>(props: AppointmentsSchedulerProps<T>) {
 	const {
@@ -51,12 +55,35 @@ export default function AppointmentsScheduler<T extends any>(props: Appointments
 	const [endHour, setEndHour] = useState<Date>(new Date());
 
 	const [internalViewType, setInternalViewType] = useState<ViewType>(defaultViewType);
+	const [viewTypeLoaded, setViewTypeLoaded] = useState(false);
 	const isControlled = controlledViewType !== undefined;
 	const currentView = isControlled ? controlledViewType : internalViewType;
+
+	// Load saved view type from SecureStore on mount
+	useEffect(() => {
+		if (isControlled) {
+			setViewTypeLoaded(true);
+			return;
+		}
+		(async () => {
+			try {
+				const saved = await SecureStore.getItemAsync(VIEW_TYPE_STORAGE_KEY);
+				if (saved && VALID_VIEW_TYPES.includes(saved as ViewType)) {
+					setInternalViewType(saved as ViewType);
+				}
+			} catch (e) {
+				// ignore read errors – fall back to defaultViewType
+			} finally {
+				setViewTypeLoaded(true);
+			}
+		})();
+	}, []);
 
 	const handleViewClick = (newView: ViewType) => {
 		if (!isControlled) {
 			setInternalViewType(newView);
+			// Persist the choice so it survives app restarts
+			SecureStore.setItemAsync(VIEW_TYPE_STORAGE_KEY, newView).catch(() => {});
 		}
 		if (onViewTypeChange) {
 			onViewTypeChange(newView);
@@ -128,8 +155,89 @@ export default function AppointmentsScheduler<T extends any>(props: Appointments
 		return currentView === 'day' ? (screenWidth - 66) : 95;
 	}, [currentView, screenWidth]);
 
+	const panX = useRef(new Animated.Value(0)).current;
+	const isAnimating = useRef(false);
+
+	// Keep refs to latest values so PanResponder callbacks never read stale closures
+	const currentViewRef = useRef(currentView);
+	currentViewRef.current = currentView;
+	const screenWidthRef = useRef(screenWidth);
+	screenWidthRef.current = screenWidth;
+	const navigateRef = useRef(navigate);
+	navigateRef.current = navigate;
+
+	const panResponder = useMemo(
+		() =>
+			PanResponder.create({
+				onMoveShouldSetPanResponder: (_evt, gestureState) => {
+					if (currentViewRef.current !== 'day' || isAnimating.current) return false;
+					const { dx, dy } = gestureState;
+					return Math.abs(dx) > 15 && Math.abs(dx) > Math.abs(dy) * 1.5;
+				},
+				onPanResponderMove: (_evt, gestureState) => {
+					panX.setValue(gestureState.dx);
+				},
+				onPanResponderRelease: (_evt, gestureState) => {
+					const { dx, vx } = gestureState;
+					const sw = screenWidthRef.current;
+					const swipeThreshold = sw * 0.3;
+
+					if (dx < -swipeThreshold || vx < -0.5) {
+						isAnimating.current = true;
+						Animated.timing(panX, {
+							toValue: -sw,
+							duration: 200,
+							useNativeDriver: true,
+						}).start(() => {
+							navigateRef.current(1);
+							panX.setValue(sw);
+							Animated.timing(panX, {
+								toValue: 0,
+								duration: 200,
+								useNativeDriver: true,
+							}).start(() => {
+								isAnimating.current = false;
+							});
+						});
+					} else if (dx > swipeThreshold || vx > 0.5) {
+						isAnimating.current = true;
+						Animated.timing(panX, {
+							toValue: sw,
+							duration: 200,
+							useNativeDriver: true,
+						}).start(() => {
+							navigateRef.current(-1);
+							panX.setValue(-sw);
+							Animated.timing(panX, {
+								toValue: 0,
+								duration: 200,
+								useNativeDriver: true,
+							}).start(() => {
+								isAnimating.current = false;
+							});
+						});
+					} else {
+						Animated.spring(panX, {
+							toValue: 0,
+							useNativeDriver: true,
+						}).start();
+					}
+				},
+				onPanResponderTerminate: () => {
+					Animated.spring(panX, {
+						toValue: 0,
+						useNativeDriver: true,
+					}).start();
+				},
+			}),
+		[panX]
+	);
+
 	return (
-		<View style={[styles.container, themeStyles.container]}>
+		<View 
+			style={[styles.container, themeStyles.container]}
+			{...(currentView === 'day' ? panResponder.panHandlers : {})}
+		>
 			{isHeader && (
 				<SchedulerHeader
 					view={currentView}
@@ -177,33 +285,36 @@ export default function AppointmentsScheduler<T extends any>(props: Appointments
 						<TimesCol timesArray={timesArray} blockHeight={blockHeight} hasSpacer={isDaysNames} />
 
 						{/* Scrollable Day Columns on Right */}
-						<ScrollView
-							horizontal
-							showsHorizontalScrollIndicator={false}
-							style={styles.horizontalScroll}
-							contentContainerStyle={styles.horizontalScrollContent}
-						>
-							<View style={styles.columnsWrapper}>
-								{isDaysNames && (
-									<DaysRow daysArray={daysArray} columnWidth={columnWidth} />
-								)}
-								<Grids
-									eventTiles={eventTiles}
-									daysArray={daysArray}
-									startTime={startHour}
-									endTime={endHour}
-									timesArray={timesArray}
-									blockHeight={blockHeight}
-									onAppointmentClick={onClickHandler}
-									defaultAppointmentOpacity={defaultAppointmentOpacity}
-									defaultAppointmentBgColor={defaultAppointmentBgColor}
-									renderTile={renderTile}
-									showCurrentTimeLine={showCurrentTimeLine}
-									currentTimeLineColor={currentTimeLineColor}
-									columnWidth={columnWidth}
-								/>
-							</View>
-						</ScrollView>
+						<Animated.View style={[styles.horizontalScroll, { transform: [{ translateX: panX }] }]}>
+							<ScrollView
+								horizontal
+								showsHorizontalScrollIndicator={false}
+								style={{ flex: 1 }}
+								contentContainerStyle={styles.horizontalScrollContent}
+								scrollEnabled={currentView !== 'day'}
+							>
+								<View style={styles.columnsWrapper}>
+									{isDaysNames && (
+										<DaysRow daysArray={daysArray} columnWidth={columnWidth} />
+									)}
+									<Grids
+										eventTiles={eventTiles}
+										daysArray={daysArray}
+										startTime={startHour}
+										endTime={endHour}
+										timesArray={timesArray}
+										blockHeight={blockHeight}
+										onAppointmentClick={onClickHandler}
+										defaultAppointmentOpacity={defaultAppointmentOpacity}
+										defaultAppointmentBgColor={defaultAppointmentBgColor}
+										renderTile={renderTile}
+										showCurrentTimeLine={showCurrentTimeLine}
+										currentTimeLineColor={currentTimeLineColor}
+										columnWidth={columnWidth}
+									/>
+								</View>
+							</ScrollView>
+						</Animated.View>
 					</View>
 				</ScrollView>
 			)}
