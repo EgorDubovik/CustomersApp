@@ -19,6 +19,7 @@ import { SymbolView } from 'expo-symbols';
 import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import { API_URL } from '@/constants/Config';
 import { useColorScheme } from '@/components/useColorScheme';
 import { formatDate } from '@/components/scheduler/utils/TimeHelper';
@@ -295,6 +296,7 @@ export default function AppointmentDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { token } = useAuth();
+  const { showToast } = useToast();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const c = isDark ? palette.dark : palette.light;
@@ -810,7 +812,7 @@ export default function AppointmentDetailsScreen() {
                 onPress={(e) => {
                   e.stopPropagation();
                   Clipboard.setStringAsync(appointment.job.address!.full);
-                  Alert.alert('Copied', 'Address copied to clipboard');
+                  showToast({ message: 'Address copied to clipboard', type: 'success' });
                 }}
                 style={({ pressed }) => [styles.heroCopyBtn, pressed && { backgroundColor: 'rgba(255,255,255,0.35)' }]}
                 hitSlop={6}
