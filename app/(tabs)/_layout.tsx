@@ -49,6 +49,23 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="customers"
+        options={{
+          title: 'Customers',
+          tabBarIcon: ({ color }) => (
+            <SymbolView
+              name={{
+                ios: 'person.3.fill',
+                android: 'people',
+                web: 'people',
+              }}
+              tintColor={color}
+              size={28}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="two"
         options={{
           title: 'Tab Two',
