@@ -23,7 +23,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth, CompanyService } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import * as storage from '@/utils/storage';
-import Svg, { Path } from 'react-native-svg';
 import { API_URL } from '@/constants/Config';
 import { useColorScheme } from '@/components/useColorScheme';
 import { formatDate } from '@/components/scheduler/utils/TimeHelper';
@@ -40,16 +39,6 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const AutoAwesomeIcon = ({ size = 16, color = '#ffffff' }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24">
-    <Path d="M0 0h24v24H0z" fill="none" />
-    <Path
-      d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"
-      fill={color}
-    />
-  </Svg>
-);
 
 interface ITech {
   id: number;
@@ -79,6 +68,7 @@ interface IPayment {
   id: number;
   amount: string;
   created_at: string;
+  type_text?: string;
 }
 
 interface IAppointmentDetails {
@@ -388,6 +378,7 @@ export default function AppointmentDetailsScreen() {
 
   // AI Description Generator states
   const [aiStatus, setAiStatus] = useState<'none' | 'loading' | 'success' | 'error'>('none');
+  const [aiDots, setAiDots] = useState('.');
   const aiAnim = useSharedValue(0);
 
   useEffect(() => {
@@ -400,6 +391,25 @@ export default function AppointmentDetailsScreen() {
     } else {
       aiAnim.value = 0;
     }
+  }, [aiStatus]);
+
+  useEffect(() => {
+    let interval: any;
+    if (aiStatus === 'loading') {
+      setAiDots('.');
+      interval = setInterval(() => {
+        setAiDots((prev) => {
+          if (prev === '.') return '..';
+          if (prev === '..') return '...';
+          return '.';
+        });
+      }, 400);
+    } else {
+      setAiDots('.');
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [aiStatus]);
 
   const aiAnimatedStyle = useAnimatedStyle(() => {
@@ -1548,6 +1558,41 @@ export default function AppointmentDetailsScreen() {
             remaining={appointment.job.remainingBalance}
             isDark={isDark}
           />
+
+          {/* Payments History */}
+          {appointment.job.payments && appointment.job.payments.length > 0 && (
+            <>
+              <View style={[styles.divider, { backgroundColor: c.divider, marginVertical: 12 }]} />
+              <View style={{ gap: 8 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: c.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Payment History
+                </Text>
+                {appointment.job.payments.map((payment: IPayment, idx: number) => (
+                  <View
+                    key={payment.id}
+                    style={[
+                      styles.paymentRow,
+                      {
+                        backgroundColor: idx % 2 === 0 ? c.inputBg : 'transparent',
+                      },
+                    ]}
+                  >
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: c.text }}>
+                        {payment.type_text || 'Payment'}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: c.textMuted }}>
+                        {formatDate(payment.created_at, 'MMM DD, YYYY hh:mm A')}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: c.success }}>
+                      +${parseFloat(payment.amount).toFixed(2)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
         </View>
       </Animated.View>
 
@@ -2181,22 +2226,7 @@ export default function AppointmentDetailsScreen() {
 
               {/* Description input */}
               <View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <Text style={[styles.formLabel, { color: c.textMuted, marginBottom: 0 }]}>Description</Text>
-                  <Pressable onPress={handleAI} style={{ borderRadius: 12, overflow: 'hidden' }}>
-                    <Animated.View style={aiAnimatedStyle}>
-                      <LinearGradient
-                        colors={['#4285F4', '#9B51E0', '#EA4335']} // Google AI-like colors
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4 }}
-                      >
-                        <AutoAwesomeIcon size={12} color="#ffffff" />
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#ffffff' }}>AI Generate</Text>
-                      </LinearGradient>
-                    </Animated.View>
-                  </Pressable>
-                </View>
+                <Text style={[styles.formLabel, { color: c.textMuted }]}>Description</Text>
                 <TextInput
                   style={[
                     styles.formInput,
@@ -2218,6 +2248,43 @@ export default function AppointmentDetailsScreen() {
                   value={serviceDescription}
                   onChangeText={setServiceDescription}
                 />
+
+                {/* AI Generate Button (Below description, styled like the photo) */}
+                <Pressable
+                  onPress={handleAI}
+                  disabled={aiStatus === 'loading'}
+                  style={({ pressed }) => [
+                    styles.aiButtonContainer,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                >
+                  <Animated.View style={[styles.aiButtonGlow, aiAnimatedStyle]}>
+                    <LinearGradient
+                      colors={['#3B82F6', '#8B5CF6', '#D946EF']} // vibrant blue-to-purple gradient matching the photo
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.aiButtonGradient}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <SymbolView
+                          name={{ ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }}
+                          size={16}
+                          tintColor="#ffffff"
+                        />
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff' }}>
+                            {aiStatus === 'loading' ? 'Generating' : 'AI Generate'}
+                          </Text>
+                          {aiStatus === 'loading' && (
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff', width: 24, marginLeft: 2 }}>
+                              {aiDots}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </LinearGradient>
+                  </Animated.View>
+                </Pressable>
               </View>
 
               {/* Taxable switch row */}
@@ -2889,5 +2956,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  aiButtonContainer: {
+    marginTop: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+    alignSelf: 'flex-end',
+  },
+  aiButtonGlow: {
+    borderRadius: 12,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  aiButtonGradient: {
+    height: 38,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
 });
