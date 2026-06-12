@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
+import { useAppStateActive } from '@/hooks/useAppStateActive';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -54,6 +55,9 @@ function RootLayoutNav() {
   const { token, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  // Enable silent background configuration refreshing when transitioning back to active state
+  useAppStateActive();
 
   useEffect(() => {
     if (isLoading) return;

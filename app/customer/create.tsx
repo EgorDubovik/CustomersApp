@@ -99,128 +99,173 @@ export default function CreateCustomerScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <Stack.Screen options={{ title: 'Create Customer' }} />
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={[styles.sectionTitle, themeStyles.textTitle]}>Enter customer information</Text>
-
+      <Stack.Screen 
+        options={{ 
+          title: 'New Customer',
+          headerTitleStyle: {
+            fontWeight: '700',
+          },
+          headerRight: () => (
+            <TouchableOpacity onPress={storeCustomer} disabled={loading} style={styles.headerSaveBtn}>
+              {loading ? (
+                <ActivityIndicator size="small" color={isDark ? '#818CF8' : '#6366F1'} />
+              ) : (
+                <Text style={[styles.headerSaveText, { color: isDark ? '#818CF8' : '#6366F1' }]}>
+                  Save
+                </Text>
+              )}
+            </TouchableOpacity>
+          )
+        }} 
+      />
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+      >
         {error ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
 
-        <View style={styles.inputGroup}>
-          <Text style={[styles.label, themeStyles.textTitle]}>Customer name</Text>
-          <TextInput
-            style={[styles.input, themeStyles.inputBg, themeStyles.textTitle]}
-            placeholder="Name"
-            placeholderTextColor={isDark ? '#888ea8' : '#888ea8'}
-            value={dataForm.name}
-            onChangeText={(text) => handleChange('name', text)}
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.label, themeStyles.textTitle]}>Customer number</Text>
-          <TextInput
-            style={[
-              styles.input,
-              themeStyles.inputBg,
-              themeStyles.textTitle,
-              phoneError && styles.inputError
-            ]}
-            placeholder="Phone"
-            placeholderTextColor={isDark ? '#888ea8' : '#888ea8'}
-            keyboardType="phone-pad"
-            value={dataForm.phone}
-            onChangeText={(text) => handleChange('phone', text)}
-          />
-          {phoneError && <Text style={styles.errorHelper}>Phone number must be at least 10 digits</Text>}
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.label, themeStyles.textTitle]}>Customer Email</Text>
-          <TextInput
-            style={[styles.input, themeStyles.inputBg, themeStyles.textTitle]}
-            placeholder="Email"
-            placeholderTextColor={isDark ? '#888ea8' : '#888ea8'}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={dataForm.email}
-            onChangeText={(text) => handleChange('email', text)}
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.label, themeStyles.textTitle]}>Address</Text>
-          <TextInput
-            style={[
-              styles.input,
-              themeStyles.inputBg,
-              themeStyles.textTitle,
-              addressError && styles.inputError
-            ]}
-            placeholder="1234 Main St"
-            placeholderTextColor={isDark ? '#888ea8' : '#888ea8'}
-            value={dataForm.line1}
-            onChangeText={(text) => handleChange('line1', text)}
-          />
-          {addressError && <Text style={styles.errorHelper}>Address must be at least 5 characters</Text>}
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.label, themeStyles.textTitle]}>Address2</Text>
-          <TextInput
-            style={[styles.input, themeStyles.inputBg, themeStyles.textTitle]}
-            placeholder="Apartment, studio, or floor"
-            placeholderTextColor={isDark ? '#888ea8' : '#888ea8'}
-            value={dataForm.line2}
-            onChangeText={(text) => handleChange('line2', text)}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.inputGroup, { flex: 2, marginRight: 8 }]}>
-            <Text style={[styles.label, themeStyles.textTitle]}>City</Text>
+        <Text style={styles.sectionHeader}>Personal Info</Text>
+        
+        <View style={[styles.groupContainer, themeStyles.cardBg, themeStyles.cardBorder]}>
+          {/* Name Row */}
+          <View style={styles.rowInput}>
+            <Text style={[styles.rowLabel, themeStyles.textTitle]}>Name</Text>
             <TextInput
-              style={[styles.input, themeStyles.inputBg, themeStyles.textTitle]}
-              placeholder="Enter City"
-              placeholderTextColor={isDark ? '#888ea8' : '#888ea8'}
+              style={[styles.input, themeStyles.textTitle]}
+              placeholder="Required"
+              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
+              value={dataForm.name}
+              onChangeText={(text) => handleChange('name', text)}
+              autoCorrect={false}
+            />
+          </View>
+          
+          <View style={[styles.separator, themeStyles.separatorColor]} />
+          
+          {/* Phone Row */}
+          <View style={styles.rowInput}>
+            <Text style={[styles.rowLabel, themeStyles.textTitle, phoneError && styles.labelError]}>Phone</Text>
+            <TextInput
+              style={[styles.input, themeStyles.textTitle]}
+              placeholder="Required (10+ digits)"
+              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
+              keyboardType="phone-pad"
+              value={dataForm.phone}
+              onChangeText={(text) => handleChange('phone', text)}
+              autoCorrect={false}
+            />
+          </View>
+          
+          <View style={[styles.separator, themeStyles.separatorColor]} />
+          
+          {/* Email Row */}
+          <View style={styles.rowInput}>
+            <Text style={[styles.rowLabel, themeStyles.textTitle]}>Email</Text>
+            <TextInput
+              style={[styles.input, themeStyles.textTitle]}
+              placeholder="Optional"
+              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={dataForm.email}
+              onChangeText={(text) => handleChange('email', text)}
+              autoCorrect={false}
+            />
+          </View>
+        </View>
+        
+        {phoneError && <Text style={styles.errorHelper}>Phone number must be at least 10 digits</Text>}
+
+        <Text style={styles.sectionHeader}>Address</Text>
+        
+        <View style={[styles.groupContainer, themeStyles.cardBg, themeStyles.cardBorder]}>
+          {/* Address Line 1 */}
+          <View style={styles.rowInput}>
+            <Text style={[styles.rowLabel, themeStyles.textTitle, addressError && styles.labelError]}>Street</Text>
+            <TextInput
+              style={[styles.input, themeStyles.textTitle]}
+              placeholder="Required (5+ chars)"
+              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
+              value={dataForm.line1}
+              onChangeText={(text) => handleChange('line1', text)}
+            />
+          </View>
+          
+          <View style={[styles.separator, themeStyles.separatorColor]} />
+          
+          {/* Address Line 2 */}
+          <View style={styles.rowInput}>
+            <Text style={[styles.rowLabel, themeStyles.textTitle]}>Street 2</Text>
+            <TextInput
+              style={[styles.input, themeStyles.textTitle]}
+              placeholder="Apt, suite, unit (optional)"
+              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
+              value={dataForm.line2}
+              onChangeText={(text) => handleChange('line2', text)}
+            />
+          </View>
+          
+          <View style={[styles.separator, themeStyles.separatorColor]} />
+          
+          {/* City */}
+          <View style={styles.rowInput}>
+            <Text style={[styles.rowLabel, themeStyles.textTitle]}>City</Text>
+            <TextInput
+              style={[styles.input, themeStyles.textTitle]}
+              placeholder="Optional"
+              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
               value={dataForm.city}
               onChangeText={(text) => handleChange('city', text)}
             />
           </View>
-          <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-            <Text style={[styles.label, themeStyles.textTitle]}>State</Text>
+          
+          <View style={[styles.separator, themeStyles.separatorColor]} />
+          
+          {/* State */}
+          <View style={styles.rowInput}>
+            <Text style={[styles.rowLabel, themeStyles.textTitle]}>State</Text>
             <TextInput
-              style={[styles.input, themeStyles.inputBg, themeStyles.textTitle]}
-              placeholder="State"
-              placeholderTextColor={isDark ? '#888ea8' : '#888ea8'}
+              style={[styles.input, themeStyles.textTitle]}
+              placeholder="Optional"
+              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
               value={dataForm.state}
               onChangeText={(text) => handleChange('state', text)}
             />
           </View>
-          <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={[styles.label, themeStyles.textTitle]}>Zip</Text>
+          
+          <View style={[styles.separator, themeStyles.separatorColor]} />
+          
+          {/* Zip */}
+          <View style={styles.rowInput}>
+            <Text style={[styles.rowLabel, themeStyles.textTitle]}>Zip Code</Text>
             <TextInput
-              style={[styles.input, themeStyles.inputBg, themeStyles.textTitle]}
-              placeholder="Zip"
-              placeholderTextColor={isDark ? '#888ea8' : '#888ea8'}
+              style={[styles.input, themeStyles.textTitle]}
+              placeholder="Optional"
+              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
+              keyboardType="number-pad"
               value={dataForm.zip}
               onChangeText={(text) => handleChange('zip', text)}
             />
           </View>
         </View>
+        
+        {addressError && <Text style={styles.errorHelper}>Address must be at least 5 characters</Text>}
 
         <TouchableOpacity
-          style={[styles.button, themeStyles.btnPrimary]}
+          style={[styles.primaryButton, themeStyles.btnPrimary]}
           onPress={storeCustomer}
           disabled={loading}
+          activeOpacity={0.8}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color="#ffffff" />
           ) : (
-            <Text style={styles.buttonText}>Create</Text>
+            <Text style={styles.primaryButtonText}>Create Customer</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -233,78 +278,110 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
+    padding: 16,
+    paddingTop: 8,
     paddingBottom: 40,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 20,
-  },
-  errorContainer: {
-    backgroundColor: '#ffe5e6',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  errorText: {
-    color: '#e7515a',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  input: {
-    height: 48,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  inputError: {
-    borderColor: '#e7515a',
-    borderWidth: 1,
-  },
-  errorHelper: {
-    color: '#e7515a',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  button: {
-    height: 50,
-    borderRadius: 8,
+  headerSaveBtn: {
+    paddingHorizontal: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10,
   },
-  buttonText: {
-    color: '#fff',
+  headerSaveText: {
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  errorContainer: {
+    backgroundColor: 'rgba(255, 59, 48, 0.12)',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.2)',
+  },
+  errorText: {
+    color: '#ff3b30',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  sectionHeader: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8e8e93',
+    textTransform: 'uppercase',
+    marginLeft: 16,
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  groupContainer: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  rowInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    height: 48,
+  },
+  rowLabel: {
+    width: 90,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '500',
+  },
+  labelError: {
+    color: '#ff3b30',
+  },
+  input: {
+    flex: 1,
+    height: '100%',
+    fontSize: 16,
+    paddingVertical: 0,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 16,
+  },
+  errorHelper: {
+    color: '#ff3b30',
+    fontSize: 13,
+    marginLeft: 16,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  primaryButton: {
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  primaryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
 const lightStyles = StyleSheet.create({
-  bg: { backgroundColor: '#f6f8fa' },
-  inputBg: { backgroundColor: '#ffffff', borderColor: '#e0e6ed' },
-  textTitle: { color: '#0e1726' },
-  btnPrimary: { backgroundColor: '#4361ee' },
+  bg: { backgroundColor: '#f2f2f7' }, // iOS Grouped Background Light
+  cardBg: { backgroundColor: '#ffffff' },
+  cardBorder: { borderWidth: 1, borderColor: 'rgba(0,0,0,0.03)' },
+  textTitle: { color: '#000000' },
+  separatorColor: { backgroundColor: 'rgba(0,0,0,0.08)' },
+  btnPrimary: { backgroundColor: '#007aff' }, // iOS System Blue
 });
 
 const darkStyles = StyleSheet.create({
-  bg: { backgroundColor: '#060818' },
-  inputBg: { backgroundColor: '#0e1726', borderColor: '#1b2e4b' },
-  textTitle: { color: '#bfc9d4' },
-  btnPrimary: { backgroundColor: '#805dca' },
+  bg: { backgroundColor: '#000000' }, // iOS Grouped Background Dark
+  cardBg: { backgroundColor: '#1c1c1e' }, // iOS System Gray 6 Dark
+  cardBorder: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
+  textTitle: { color: '#ffffff' },
+  separatorColor: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  btnPrimary: { backgroundColor: '#0A84FF' }, // iOS System Blue Dark
 });
