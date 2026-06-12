@@ -20,7 +20,7 @@ import { useAuth } from '@/context/AuthContext';
 import { API_URL } from '@/constants/Config';
 import { useColorScheme } from '@/components/useColorScheme';
 
-const { width } = Dimensions.get('window');
+const { width, height: screenHeight } = Dimensions.get('screen');
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -81,176 +81,175 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { height: screenHeight }]}>
       {/* Background Gradient */}
       <Image
         source={require('../assets/images/auth/bg-gradient.png')}
-        style={StyleSheet.absoluteFill}
-        resizeMode="cover"
+        style={[StyleSheet.absoluteFill, { height: screenHeight }]}
+        resizeMode="stretch"
       />
 
       {/* Map Overlay */}
-      <ImageBackground
+      <Image
         source={require('../assets/images/auth/map.png')}
-        style={StyleSheet.absoluteFill}
-        resizeMode="cover"
-        imageStyle={{ opacity: isDark ? 0.15 : 0.4 }}
-      >
-        {/* Floating Objects - Premium Design */}
-        <Image
-          source={require('../assets/images/auth/coming-soon-object1.png')}
-          style={styles.floatingObj1}
-          resizeMode="contain"
-        />
-        <Image
-          source={require('../assets/images/auth/coming-soon-object2.png')}
-          style={styles.floatingObj2}
-          resizeMode="contain"
-        />
-        <Image
-          source={require('../assets/images/auth/coming-soon-object3.png')}
-          style={styles.floatingObj3}
-          resizeMode="contain"
-        />
+        style={[StyleSheet.absoluteFill, { height: screenHeight, opacity: isDark ? 0.15 : 0.4 }]}
+        resizeMode="stretch"
+      />
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingView}
+      {/* Floating Objects - Premium Design */}
+      <Image
+        source={require('../assets/images/auth/coming-soon-object1.png')}
+        style={styles.floatingObj1}
+        resizeMode="contain"
+      />
+      <Image
+        source={require('../assets/images/auth/coming-soon-object2.png')}
+        style={styles.floatingObj2}
+        resizeMode="contain"
+      />
+      <Image
+        source={require('../assets/images/auth/coming-soon-object3.png')}
+        style={styles.floatingObj3}
+        resizeMode="contain"
+      />
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoidingView}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContainer,
+            { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 40 },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <ScrollView
-            contentContainerStyle={[
-              styles.scrollContainer,
-              { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 40 },
+          {/* Glassmorphic Login Card */}
+          <View
+            style={[
+              styles.card,
+              isDark ? styles.cardDark : styles.cardLight,
+              { shadowColor: isDark ? '#000' : '#4361ee' },
             ]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
           >
-            {/* Glassmorphic Login Card */}
-            <View
-              style={[
-                styles.card,
-                isDark ? styles.cardDark : styles.cardLight,
-                { shadowColor: isDark ? '#000' : '#4361ee' },
-              ]}
-            >
-              <View style={styles.header}>
-                <Text style={styles.title}>SIGN IN</Text>
-                <Text style={styles.subtitle}>Enter your email and password to login</Text>
+            <View style={styles.header}>
+              <Text style={styles.title}>SIGN IN</Text>
+              <Text style={styles.subtitle}>Enter your email and password to login</Text>
+            </View>
+
+            {/* Error Message */}
+            {!!errorMessage && (
+              <View style={[styles.errorContainer, isDark ? styles.errorDark : styles.errorLight]}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            )}
+
+            {/* Form Fields */}
+            <View style={styles.form}>
+              {/* Email Field */}
+              <View style={styles.inputWrapper}>
+                <Text style={[styles.label, isDark ? styles.textDark : styles.textLight]}>Email</Text>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    isDark ? styles.inputContainerDark : styles.inputContainerLight,
+                  ]}
+                >
+                  <SymbolView
+                    name={{ ios: 'envelope.fill', android: 'mail', web: 'mail' }}
+                    size={20}
+                    tintColor="#888ea8"
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.input, isDark ? styles.inputDarkText : styles.inputLightText]}
+                    placeholder="Enter Email"
+                    placeholderTextColor="#888ea8"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
               </View>
 
-              {/* Error Message */}
-              {!!errorMessage && (
-                <View style={[styles.errorContainer, isDark ? styles.errorDark : styles.errorLight]}>
-                  <Text style={styles.errorText}>{errorMessage}</Text>
-                </View>
-              )}
-
-              {/* Form Fields */}
-              <View style={styles.form}>
-                {/* Email Field */}
-                <View style={styles.inputWrapper}>
-                  <Text style={[styles.label, isDark ? styles.textDark : styles.textLight]}>Email</Text>
-                  <View
-                    style={[
-                      styles.inputContainer,
-                      isDark ? styles.inputContainerDark : styles.inputContainerLight,
-                    ]}
-                  >
-                    <SymbolView
-                      name={{ ios: 'envelope.fill', android: 'mail', web: 'mail' }}
-                      size={20}
-                      tintColor="#888ea8"
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={[styles.input, isDark ? styles.inputDarkText : styles.inputLightText]}
-                      placeholder="Enter Email"
-                      placeholderTextColor="#888ea8"
-                      value={email}
-                      onChangeText={setEmail}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                  </View>
-                </View>
-
-                {/* Password Field */}
-                <View style={styles.inputWrapper}>
-                  <Text style={[styles.label, isDark ? styles.textDark : styles.textLight]}>Password</Text>
-                  <View
-                    style={[
-                      styles.inputContainer,
-                      isDark ? styles.inputContainerDark : styles.inputContainerLight,
-                    ]}
-                  >
-                    <SymbolView
-                      name={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
-                      size={20}
-                      tintColor="#888ea8"
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={[styles.input, isDark ? styles.inputDarkText : styles.inputLightText]}
-                      placeholder="Enter Password"
-                      placeholderTextColor="#888ea8"
-                      value={password}
-                      onChangeText={setPassword}
-                      secureTextEntry={securePassword}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                    <TouchableOpacity
-                      onPress={() => setSecurePassword(!securePassword)}
-                      style={styles.eyeIcon}
-                    >
-                      <SymbolView
-                        name={
-                          securePassword
-                            ? { ios: 'eye.slash.fill', android: 'visibility_off', web: 'visibility_off' }
-                            : { ios: 'eye.fill', android: 'visibility', web: 'visibility' }
-                        }
-                        size={20}
-                        tintColor="#888ea8"
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Sign In Button */}
-                <TouchableOpacity
-                  style={styles.buttonWrapper}
-                  onPress={handleLogin}
-                  disabled={loading}
-                  activeOpacity={0.8}
+              {/* Password Field */}
+              <View style={styles.inputWrapper}>
+                <Text style={[styles.label, isDark ? styles.textDark : styles.textLight]}>Password</Text>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    isDark ? styles.inputContainerDark : styles.inputContainerLight,
+                  ]}
                 >
-                  <LinearGradient
-                    colors={['#4361ee', '#805dca']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.button}
+                  <SymbolView
+                    name={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
+                    size={20}
+                    tintColor="#888ea8"
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.input, isDark ? styles.inputDarkText : styles.inputLightText]}
+                    placeholder="Enter Password"
+                    placeholderTextColor="#888ea8"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={securePassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setSecurePassword(!securePassword)}
+                    style={styles.eyeIcon}
                   >
-                    {loading ? (
-                      <ActivityIndicator size="small" color="#ffffff" />
-                    ) : (
-                      <Text style={styles.buttonText}>SIGN IN</Text>
-                    )}
-                  </LinearGradient>
-                </TouchableOpacity>
-
-                <View style={styles.footer}>
-                  <Text style={[styles.footerText, isDark ? styles.textDark : styles.textLight]}>
-                    Don't have an account ?{' '}
-                  </Text>
-                  <TouchableOpacity>
-                    <Text style={styles.signUpLink}>SIGN UP</Text>
+                    <SymbolView
+                      name={
+                        securePassword
+                          ? { ios: 'eye.slash.fill', android: 'visibility_off', web: 'visibility_off' }
+                          : { ios: 'eye.fill', android: 'visibility', web: 'visibility' }
+                      }
+                      size={20}
+                      tintColor="#888ea8"
+                    />
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* Sign In Button */}
+              <TouchableOpacity
+                style={styles.buttonWrapper}
+                onPress={handleLogin}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={['#4361ee', '#805dca']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.button}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Text style={styles.buttonText}>SIGN IN</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <View style={styles.footer}>
+                <Text style={[styles.footerText, isDark ? styles.textDark : styles.textLight]}>
+                  Don't have an account ?{' '}
+                </Text>
+                <TouchableOpacity>
+                  <Text style={styles.signUpLink}>SIGN UP</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </ImageBackground>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }

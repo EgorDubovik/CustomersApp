@@ -18,6 +18,23 @@ export default function TabLayout() {
         headerShown: useClientOnlyValue(false, true),
       }}>
       <Tabs.Screen
+        name="customers"
+        options={{
+          title: 'Customers',
+          tabBarIcon: ({ color }) => (
+            <SymbolView
+              name={{
+                ios: 'person.3.fill',
+                android: 'people',
+                web: 'people',
+              }}
+              tintColor={color}
+              size={28}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
           title: 'Schedule',
@@ -49,32 +66,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="customers"
+        name="settings"
         options={{
-          title: 'Customers',
+          title: 'Settings',
           tabBarIcon: ({ color }) => (
             <SymbolView
               name={{
-                ios: 'person.3.fill',
-                android: 'people',
-                web: 'people',
-              }}
-              tintColor={color}
-              size={28}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="two"
-        options={{
-          title: 'Tab Two',
-          tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'chevron.left.forwardslash.chevron.right',
-                android: 'code',
-                web: 'code',
+                ios: 'gearshape.fill',
+                android: 'settings',
+                web: 'settings',
               }}
               tintColor={color}
               size={28}

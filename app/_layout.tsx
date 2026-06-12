@@ -9,6 +9,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { useAppStateActive } from '@/hooks/useAppStateActive';
+import { SettingsProvider, useSettings } from '@/context/SettingsContext';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -44,15 +45,18 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
+    <SettingsProvider>
+      <AuthProvider>
+        <RootLayoutNav />
+      </AuthProvider>
+    </SettingsProvider>
   );
 }
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { token, isLoading } = useAuth();
+  const { isSettingsLoading } = useSettings();
   const segments = useSegments();
   const router = useRouter();
 
@@ -60,7 +64,7 @@ function RootLayoutNav() {
   useAppStateActive();
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || isSettingsLoading) return;
 
     const inAuthGroup = segments[0] === 'login';
 
@@ -71,9 +75,9 @@ function RootLayoutNav() {
       // If user is authenticated and on login page, redirect to main tabs
       router.replace('/(tabs)');
     }
-  }, [token, isLoading, segments]);
+  }, [token, isLoading, isSettingsLoading, segments]);
 
-  if (isLoading) {
+  if (isLoading || isSettingsLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#4361ee" />
@@ -81,8 +85,18 @@ function RootLayoutNav() {
     );
   }
 
+  const CustomDarkTheme = {
+    ...DarkTheme,
+    colors: {
+      ...DarkTheme.colors,
+      background: '#000000',
+      card: '#000000',
+      border: 'rgba(255, 255, 255, 0.1)',
+    },
+  };
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={colorScheme === 'dark' ? CustomDarkTheme : DefaultTheme}>
       <ToastProvider>
         <Stack>
           <Stack.Screen name="login" options={{ headerShown: false }} />

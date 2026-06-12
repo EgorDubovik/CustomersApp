@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { formatDate } from '../utils/TimeHelper';
+import { useColorScheme } from '@/components/useColorScheme';
 
 interface DefaultTileProps {
 	start: Date;
@@ -13,9 +14,15 @@ interface DefaultTileProps {
 }
 
 export default function DefaultTile({ start, end, title, color = '#3b82f6', status, paymentPending, onClick }: DefaultTileProps) {
+	const colorScheme = useColorScheme();
+	const isDark = colorScheme === 'dark';
 	const formattedTime = `${formatDate(start, 'hh:mm A')} - ${formatDate(end, 'hh:mm A')}`;
 	const isCompleted = status === 2;
 	const showPendingDot = isCompleted && paymentPending;
+
+	const completedBgColor = isDark ? '#2c2c2e' : '#e5e7eb';
+	const completedTitleColor = isDark ? '#a1a1aa' : '#000000';
+	const completedTimeColor = isDark ? '#71717a' : '#4b5563';
 
 	return (
 		<Pressable
@@ -23,13 +30,13 @@ export default function DefaultTile({ start, end, title, color = '#3b82f6', stat
 			style={({ pressed }) => [
 				styles.tileContainer,
 				isCompleted
-					? [styles.completedTile, { borderLeftColor: color, opacity: pressed ? 0.8 : 1 }]
+					? { backgroundColor: completedBgColor, borderLeftColor: color, borderLeftWidth: 4, opacity: pressed ? 0.8 : 1 }
 					: { backgroundColor: color, opacity: pressed ? 0.8 : 1 },
 			]}
 		>
 			<View style={styles.content}>
 				<Text
-					style={[styles.titleText, isCompleted && styles.completedText]}
+					style={[styles.titleText, isCompleted && { color: completedTitleColor }]}
 					numberOfLines={1}
 				>
 					{title || 'unknown'}
@@ -37,7 +44,7 @@ export default function DefaultTile({ start, end, title, color = '#3b82f6', stat
 				<Text
 					style={[
 						styles.timeText,
-						isCompleted ? styles.completedTimeText : { color: 'rgba(255, 255, 255, 0.85)' },
+						isCompleted ? { color: completedTimeColor } : { color: 'rgba(255, 255, 255, 0.85)' },
 					]}
 					numberOfLines={1}
 				>

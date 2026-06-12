@@ -409,7 +409,6 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     padding: 12,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
     borderTopWidth: 1,
   },
   inputWrapper: {

@@ -22,12 +22,16 @@ export default function DefaultListItem<T extends CalendarEvent>({
 	const bgColor = event.color || defaultAppointmentBgColor;
 	const isCompleted = event.data?.status === 2;
 
+	const completedBgColor = isDark ? '#2c2c2e' : '#e5e7eb';
+	const completedTitleColor = isDark ? '#a1a1aa' : '#000000';
+	const completedTimeColor = isDark ? '#71717a' : '#4b5563';
+
 	return (
 		<Pressable
 			onPress={onPress}
 			style={({ pressed }) => [
 				styles.card,
-				isCompleted ? { backgroundColor: '#e5e7eb' } : themeStyles.cardBg,
+				isCompleted ? { backgroundColor: completedBgColor } : themeStyles.cardBg,
 				{ borderLeftColor: bgColor, opacity: pressed ? 0.8 : 1 },
 			]}
 		>
@@ -35,7 +39,7 @@ export default function DefaultListItem<T extends CalendarEvent>({
 				<Text
 					style={[
 						styles.title,
-						isCompleted ? { color: '#000000' } : themeStyles.titleText,
+						isCompleted ? { color: completedTitleColor } : themeStyles.titleText,
 					]}
 					numberOfLines={1}
 				>
@@ -45,7 +49,7 @@ export default function DefaultListItem<T extends CalendarEvent>({
 					<Text
 						style={[
 							styles.timeText,
-							isCompleted ? { color: '#4b5563' } : themeStyles.timeText,
+							isCompleted ? { color: completedTimeColor } : themeStyles.timeText,
 						]}
 					>
 						{formatDate(event.start, 'hh:mm A')} - {formatDate(event.end, 'hh:mm A')}

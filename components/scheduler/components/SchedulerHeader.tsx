@@ -221,7 +221,7 @@ const lightStyles = StyleSheet.create({
 const darkStyles = StyleSheet.create({
 	container: {
 		borderColor: '#191e3a',
-		backgroundColor: '#0e1726',
+		backgroundColor: '#060818',
 	},
 	switcherBg: {
 		backgroundColor: '#1b2e4b',

@@ -1,6 +1,7 @@
-import { useColorScheme as useColorSchemeCore } from 'react-native';
+import { useContext } from 'react';
+import { SettingsContext } from '@/context/SettingsContext';
 
 export const useColorScheme = () => {
-  const coreScheme = useColorSchemeCore();
-  return coreScheme === 'unspecified' ? 'light' : coreScheme;
+  const context = useContext(SettingsContext);
+  return context?.resolvedTheme || 'light';
 };

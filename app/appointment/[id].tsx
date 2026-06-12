@@ -25,6 +25,7 @@ import { useToast } from '@/context/ToastContext';
 import * as storage from '@/utils/storage';
 import { API_URL } from '@/constants/Config';
 import { useColorScheme } from '@/components/useColorScheme';
+import { useSettings } from '@/context/SettingsContext';
 import { formatDate } from '@/components/scheduler/utils/TimeHelper';
 import Animated, {
   FadeInDown,
@@ -326,6 +327,7 @@ export default function AppointmentDetailsScreen() {
   const panJobHistory = useRef(createSwipePanResponder(() => setJobHistoryModalVisible(false))).current;
   const { showToast } = useToast();
   const colorScheme = useColorScheme();
+  const { navigationMap } = useSettings();
   const isDark = colorScheme === 'dark';
   const c = isDark ? palette.dark : palette.light;
 
@@ -1095,11 +1097,16 @@ export default function AppointmentDetailsScreen() {
             <Pressable
               onPress={() => {
                 const address = encodeURIComponent(appointment.job.address!.full);
-                const url = Platform.select({
-                  ios: `maps://app?daddr=${address}`,
-                  android: `google.navigation:q=${address}`,
-                  default: `https://www.google.com/maps/dir/?api=1&destination=${address}`,
-                });
+                let url = '';
+                if (navigationMap === 'google') {
+                  url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
+                } else {
+                  url = Platform.select({
+                    ios: `maps://app?daddr=${address}`,
+                    android: `google.navigation:q=${address}`,
+                    default: `https://www.google.com/maps/dir/?api=1&destination=${address}`,
+                  }) || '';
+                }
                 Linking.openURL(url);
               }}
               style={({ pressed }) => [styles.heroAddressRow, pressed && { opacity: 0.75 }]}
@@ -1526,8 +1533,8 @@ export default function AppointmentDetailsScreen() {
             style={({ pressed }) => [
               styles.addServiceBtn,
               {
-                borderColor: c.primaryMuted,
-                backgroundColor: c.inputBg,
+                borderColor: isDark ? 'rgba(129, 140, 248, 0.35)' : 'rgba(99, 102, 241, 0.3)',
+                backgroundColor: isDark ? 'rgba(129, 140, 248, 0.12)' : 'rgba(99, 102, 241, 0.08)',
                 opacity: pressed ? 0.7 : 1,
               },
             ]}
