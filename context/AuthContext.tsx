@@ -3,8 +3,13 @@ import * as storage from '../utils/storage';
 import { API_URL } from '../constants/Config';
 
 export interface User {
+  id?: number;
   name: string;
   email: string;
+  phone?: string;
+  company_id?: number;
+  color?: string;
+  roles_ids?: number[];
 }
 
 export interface CompanySettings {
@@ -49,6 +54,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       if (response.status === 200 || response.status === 201) {
         const data = await response.json();
+        if (data.user) {
+          setUser(data.user);
+          await storage.setItem('auth_user', JSON.stringify(data.user));
+        }
         if (data.companySettings) {
           setCompanySettings(data.companySettings);
           await storage.setItem('company_settings', JSON.stringify(data.companySettings));

@@ -72,6 +72,17 @@ interface IPayment {
   type_text?: string;
 }
 
+interface INote {
+  id: number;
+  text: string;
+  created_at: string;
+  creator: {
+    id: number;
+    name: string;
+    color: string;
+  };
+}
+
 interface IAppointmentDetails {
   id: number;
   status: number;
@@ -88,6 +99,7 @@ interface IAppointmentDetails {
     address?: { full: string };
     customer?: { id: number; name: string; email: string; phone: string; jobsCount: number; addresses?: { full: string }[] };
     appointments?: { id: number; status: number; start: string; end: string; techs?: { id: number; name: string; color: string }[] }[];
+    notes?: INote[];
   };
 }
 
@@ -305,7 +317,7 @@ export default function AppointmentDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const navigation = useNavigation();
-  const { token, companySettings, companyServices } = useAuth();
+  const { token, user, companySettings, companyServices } = useAuth();
 
   const createSwipePanResponder = (onClose: () => void) => {
     return PanResponder.create({
@@ -377,6 +389,11 @@ export default function AppointmentDetailsScreen() {
   const [serviceFormLoading, setServiceFormLoading] = useState(false);
 
   const panService = useRef(createSwipePanResponder(() => setServiceModalVisible(false))).current;
+
+  // Notes States
+  const [newNote, setNewNote] = useState('');
+  const [loadingSaveNote, setLoadingSaveNote] = useState(false);
+  const [loadingRemoveNote, setLoadingRemoveNote] = useState<number>(0);
 
   // AI Description Generator states
   const [aiStatus, setAiStatus] = useState<'none' | 'loading' | 'success' | 'error'>('none');
@@ -881,6 +898,86 @@ export default function AppointmentDetailsScreen() {
               Alert.alert('Error', err.message || 'Something went wrong while deleting.');
             } finally {
               setServiceFormLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ─── Note Handlers ──────────────────────────────────────────────────────────
+  const canDeleteNote = (note: INote) => {
+    if (!user) return false;
+    const roles_ids = user.roles_ids || [];
+    return roles_ids.includes(1) || user.id === note.creator?.id;
+  };
+
+  const handleSaveNote = async () => {
+    if (!newNote.trim() || !appointment || !token) return;
+
+    setLoadingSaveNote(true);
+    try {
+      const response = await fetch(`${API_URL}/jobs/notes/${appointment.job.id}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ text: newNote.trim() }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to save note: status ${response.status}`);
+      }
+
+      setNewNote('');
+      await fetchDetails(true);
+      showToast({ message: 'Note added successfully', type: 'success' });
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('Error', err.message || 'Something went wrong while saving note.');
+    } finally {
+      setLoadingSaveNote(false);
+    }
+  };
+
+  const handleRemoveNote = (noteId: number) => {
+    if (!token) return;
+
+    Alert.alert(
+      'Delete Note',
+      'Are you sure you want to delete this note?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setLoadingRemoveNote(noteId);
+            try {
+              const response = await fetch(`${API_URL}/jobs/notes/${noteId}`, {
+                method: 'DELETE',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Accept': 'application/json',
+                },
+              });
+
+              if (!response.ok) {
+                if (response.status === 403) {
+                  throw new Error('You are not allowed to delete this note');
+                }
+                throw new Error(`Failed to delete note: status ${response.status}`);
+              }
+
+              await fetchDetails(true);
+              showToast({ message: 'Note deleted successfully', type: 'success' });
+            } catch (err: any) {
+              console.error(err);
+              Alert.alert('Error', err.message || 'Something went wrong while deleting note.');
+            } finally {
+              setLoadingRemoveNote(0);
             }
           },
         },
@@ -1600,6 +1697,140 @@ export default function AppointmentDetailsScreen() {
               </View>
             </>
           )}
+        </View>
+      </Animated.View>
+
+      {/* ═══ JOB NOTES CARD ════════════════════════════════════════════════════ */}
+      <Animated.View entering={FadeInDown.duration(500).delay(600)} style={{ paddingHorizontal: 16, marginTop: 12 }}>
+        <View style={[styles.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+          <View style={styles.cardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={[styles.cardHeaderIcon, { backgroundColor: c.primaryMuted }]}>
+                <SymbolView
+                  name={{ ios: 'note.text', android: 'note', web: 'note' }}
+                  size={14}
+                  tintColor={c.primary}
+                />
+              </View>
+              <Text style={[styles.cardTitle, { color: c.text }]}>Notes</Text>
+            </View>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: c.textMuted }}>
+              {appointment.job.notes?.length || 0} items
+            </Text>
+          </View>
+
+          {/* Notes list */}
+          {(!appointment.job.notes || appointment.job.notes.length === 0) ? (
+            <Text style={{ fontSize: 13, fontStyle: 'italic', color: c.textMuted, paddingVertical: 8 }}>
+              No notes added yet.
+            </Text>
+          ) : (
+            <View style={styles.notesList}>
+              {appointment.job.notes.map((note) => {
+                const isSelf = note.creator?.id === user?.id && user?.id !== undefined;
+                return (
+                  <View key={note.id} style={styles.noteItem}>
+                    <View
+                      style={[
+                        styles.noteContent,
+                        isSelf ? styles.noteBubbleSelf : styles.noteBubbleOther,
+                        !isSelf && { backgroundColor: c.primary }
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.noteText,
+                          { color: isSelf ? c.text : '#ffffff' }
+                        ]}
+                      >
+                        {note.text}
+                      </Text>
+                      <View style={styles.noteMeta}>
+                        <Text
+                          style={[
+                            styles.noteAuthor,
+                            { color: isSelf ? c.textMuted : 'rgba(255,255,255,0.7)' }
+                          ]}
+                        >
+                          {note.creator?.name || 'Unknown'}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.noteDate,
+                            { color: isSelf ? c.textMuted : 'rgba(255,255,255,0.7)' }
+                          ]}
+                        >
+                          {formatDate(note.created_at, 'MMM DD, YYYY hh:mm A')}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {canDeleteNote(note) && (
+                      <View style={{ justifyContent: 'center', paddingLeft: 8 }}>
+                        {loadingRemoveNote === note.id ? (
+                          <ActivityIndicator size="small" color={c.danger} />
+                        ) : (
+                          <Pressable
+                            onPress={() => handleRemoveNote(note.id)}
+                            style={({ pressed }) => [
+                              styles.noteDeleteBtn,
+                              pressed && { opacity: 0.6 }
+                            ]}
+                          >
+                            <SymbolView
+                              name={{ ios: 'trash', android: 'delete', web: 'delete' }}
+                              size={16}
+                              tintColor={c.danger}
+                            />
+                          </Pressable>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Note Input */}
+          <View style={styles.noteInputContainer}>
+            <TextInput
+              value={newNote}
+              onChangeText={setNewNote}
+              placeholder="Type note here..."
+              placeholderTextColor={c.textMuted}
+              multiline
+              style={[
+                styles.noteInput,
+                {
+                  backgroundColor: c.inputBg,
+                  borderColor: c.cardBorder,
+                  color: c.text,
+                }
+              ]}
+            />
+            <Pressable
+              onPress={handleSaveNote}
+              disabled={loadingSaveNote || !newNote.trim()}
+              style={({ pressed }) => [
+                styles.noteSendBtn,
+                {
+                  backgroundColor: newNote.trim() ? c.primary : c.inputBg,
+                },
+                pressed && { opacity: 0.8 }
+              ]}
+            >
+              {loadingSaveNote ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <SymbolView
+                  name={{ ios: 'paperplane.fill', android: 'send', web: 'send' }}
+                  size={16}
+                  tintColor={newNote.trim() ? '#ffffff' : c.textMuted}
+                />
+              )}
+            </Pressable>
+          </View>
         </View>
       </Animated.View>
 
@@ -2993,5 +3224,76 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
+  },
+  notesList: {
+    gap: 8,
+    marginTop: 8,
+  },
+  noteItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 4,
+  },
+  noteContent: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 10,
+  },
+  noteBubbleSelf: {
+    backgroundColor: 'rgba(128,128,128,0.08)',
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 2,
+  },
+  noteBubbleOther: {
+    borderBottomLeftRadius: 2,
+    borderBottomRightRadius: 14,
+  },
+  noteText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  noteMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 8,
+  },
+  noteAuthor: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  noteDate: {
+    fontSize: 9,
+  },
+  noteDeleteBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noteInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  noteInput: {
+    flex: 1,
+    minHeight: 40,
+    maxHeight: 100,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+  },
+  noteSendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
