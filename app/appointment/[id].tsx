@@ -15,6 +15,7 @@ import {
   Platform,
   PanResponder,
   Switch,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack, useNavigation } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -309,6 +310,158 @@ function InfoRowIcon({
   );
 }
 
+// ─── Swipeable Note Component ──────────────────────────────────────────────────
+
+function SwipeableNote({
+  note,
+  isSelf,
+  canDelete,
+  onDelete,
+  loadingRemove,
+  c,
+  isDark,
+  formatDate,
+  setScrollEnabled,
+}: {
+  note: INote;
+  isSelf: boolean;
+  canDelete: boolean;
+  onDelete: (id: number) => void;
+  loadingRemove: boolean;
+  c: any;
+  isDark: boolean;
+  formatDate: any;
+  setScrollEnabled: (enabled: boolean) => void;
+}) {
+  const translateX = useSharedValue(0);
+  const isSwiped = useSharedValue(false);
+  const maxSwipe = -70;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        // Start as true so parent ScrollView can request termination if movement is vertical
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const { dx, dy } = gestureState;
+        // Disable parent ScrollView scroll only if gesture is horizontal and has exceeded threshold
+        if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+          setScrollEnabled(false);
+        }
+        let nextX = gestureState.dx;
+        if (isSwiped.value) {
+          nextX = maxSwipe + gestureState.dx;
+        }
+        if (nextX > 0) nextX = 0;
+        if (nextX < maxSwipe * 1.5) nextX = maxSwipe * 1.5;
+        translateX.value = nextX;
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        setScrollEnabled(true);
+        if (translateX.value < maxSwipe / 2) {
+          translateX.value = withTiming(maxSwipe, { duration: 200 });
+          isSwiped.value = true;
+        } else {
+          translateX.value = withTiming(0, { duration: 200 });
+          isSwiped.value = false;
+        }
+      },
+      onPanResponderTerminate: () => {
+        setScrollEnabled(true);
+        translateX.value = withTiming(0, { duration: 200 });
+        isSwiped.value = false;
+      },
+      onPanResponderTerminationRequest: (_, gestureState) => {
+        const { dx, dy } = gestureState;
+        // If we have already started swiping horizontally, refuse termination
+        if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+          return false;
+        }
+        // Otherwise, allow ScrollView to take over if drag is vertical
+        return Math.abs(dy) > Math.abs(dx);
+      },
+    })
+  ).current;
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  const handleClose = () => {
+    translateX.value = withTiming(0, { duration: 200 });
+    isSwiped.value = false;
+  };
+
+  return (
+    <View style={{ width: '100%', alignItems: isSelf ? 'flex-end' : 'flex-start', marginVertical: 4 }}>
+      <View style={{ position: 'relative', maxWidth: '85%', minWidth: 120 }}>
+        {canDelete && (
+          <View
+            style={{
+              position: 'absolute',
+              right: 1,
+              top: 1,
+              bottom: 1,
+              width: 70,
+              backgroundColor: c.danger,
+              justifyContent: 'center',
+              alignItems: 'center',
+              borderRadius: 13,
+            }}
+          >
+            {loadingRemove ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Pressable
+                onPress={() => {
+                  onDelete(note.id);
+                  handleClose();
+                }}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <SymbolView
+                  name={{ ios: 'trash', android: 'delete', web: 'delete' }}
+                  size={20}
+                  tintColor="#ffffff"
+                />
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        <Animated.View
+          {...(canDelete ? panResponder.panHandlers : {})}
+          style={[
+            animatedStyle,
+            styles.noteContent,
+            isSelf ? styles.noteBubbleSelf : styles.noteBubbleOther,
+            isSelf ? { backgroundColor: isDark ? '#334155' : '#E2E8F0' } : { backgroundColor: c.primary },
+          ]}
+        >
+          <Text style={[styles.noteText, { color: isSelf ? c.text : '#ffffff' }]}>
+            {note.text}
+          </Text>
+          <View style={styles.noteMeta}>
+            <Text style={[styles.noteAuthor, { color: isSelf ? c.textMuted : 'rgba(255,255,255,0.7)' }]}>
+              {note.creator?.name || 'Unknown'}
+            </Text>
+            <Text style={[styles.noteDate, { color: isSelf ? c.textMuted : 'rgba(255,255,255,0.7)' }]}>
+              {formatDate(note.created_at, 'MMM DD, hh:mm A')}
+            </Text>
+          </View>
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── Main Screen Component ────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -337,6 +490,7 @@ export default function AppointmentDetailsScreen() {
   const panPay = useRef(createSwipePanResponder(() => setPayModalVisible(false))).current;
   const panHistory = useRef(createSwipePanResponder(() => setHistoryModalVisible(false))).current;
   const panJobHistory = useRef(createSwipePanResponder(() => setJobHistoryModalVisible(false))).current;
+  const scrollViewRef = useRef<ScrollView>(null);
   const { showToast } = useToast();
   const colorScheme = useColorScheme();
   const { navigationMap } = useSettings();
@@ -374,6 +528,7 @@ export default function AppointmentDetailsScreen() {
   const [sendInvoice, setSendInvoice] = useState(true);
   const [allSignatureLines, setAllSignatureLines] = useState<Point[][]>([]);
   const [currentSignatureLine, setCurrentSignatureLine] = useState<Point[]>([]);
+  const [payScrollEnabled, setPayScrollEnabled] = useState(true);
 
   // Timer reference interval
   const timerIntervalRef = useRef<any>(null);
@@ -394,6 +549,9 @@ export default function AppointmentDetailsScreen() {
   const [newNote, setNewNote] = useState('');
   const [loadingSaveNote, setLoadingSaveNote] = useState(false);
   const [loadingRemoveNote, setLoadingRemoveNote] = useState<number>(0);
+  const [notesModalVisible, setNotesModalVisible] = useState(false);
+  const [focusNotesInput, setFocusNotesInput] = useState(false);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   // AI Description Generator states
   const [aiStatus, setAiStatus] = useState<'none' | 'loading' | 'success' | 'error'>('none');
@@ -908,8 +1066,7 @@ export default function AppointmentDetailsScreen() {
   // ─── Note Handlers ──────────────────────────────────────────────────────────
   const canDeleteNote = (note: INote) => {
     if (!user) return false;
-    const roles_ids = user.roles_ids || [];
-    return roles_ids.includes(1) || user.id === note.creator?.id;
+    return user.id === note.creator?.id;
   };
 
   const handleSaveNote = async () => {
@@ -933,6 +1090,7 @@ export default function AppointmentDetailsScreen() {
 
       setNewNote('');
       await fetchDetails(true);
+      setNotesModalVisible(false);
       showToast({ message: 'Note added successfully', type: 'success' });
     } catch (err: any) {
       console.error(err);
@@ -1013,6 +1171,7 @@ export default function AppointmentDetailsScreen() {
 
   const onSignatureTouchStart = (e: GestureResponderEvent) => {
     const { locationX, locationY } = e.nativeEvent;
+    setPayScrollEnabled(false);
     setCurrentSignatureLine([{ x: locationX, y: locationY }]);
   };
 
@@ -1022,6 +1181,7 @@ export default function AppointmentDetailsScreen() {
   };
 
   const onSignatureTouchEnd = () => {
+    setPayScrollEnabled(true);
     if (currentSignatureLine.length > 0) {
       setAllSignatureLines(prev => [...prev, currentSignatureLine]);
       setCurrentSignatureLine([]);
@@ -1159,6 +1319,7 @@ export default function AppointmentDetailsScreen() {
 
   return (
     <ScrollView
+      scrollEnabled={scrollEnabled}
       style={{ flex: 1, backgroundColor: c.bg }}
       contentContainerStyle={{ paddingBottom: 40 }}
       showsVerticalScrollIndicator={false}
@@ -1168,7 +1329,7 @@ export default function AppointmentDetailsScreen() {
       {/* ═══ HERO SECTION ═══════════════════════════════════════════════════════ */}
       <Animated.View entering={FadeInDown.duration(500)}>
         <LinearGradient
-          colors={currentStatus.gradient}
+          colors={c.heroGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.heroSection}
@@ -1274,18 +1435,18 @@ export default function AppointmentDetailsScreen() {
           style={({ pressed }) => [
             styles.actionBtn,
             {
-              backgroundColor: appointment.status === 2 ? c.warningMuted : c.primaryMuted,
-              borderColor: appointment.status === 2 ? c.warning : c.primary,
+              backgroundColor: appointment.status === 2 ? c.inputBg : c.primaryMuted,
+              borderColor: appointment.status === 2 ? c.divider : c.primary,
             },
             pressed && { transform: [{ scale: 0.96 }] },
           ]}
         >
           {statusLoading ? (
-            <ActivityIndicator size="small" color={c.primary} />
+            <ActivityIndicator size="small" color={appointment.status === 2 ? c.textMuted : c.primary} />
           ) : (
             <>
-              <SymbolView name={currentStatus.icon} size={16} tintColor={appointment.status === 2 ? c.warning : c.primary} />
-              <Text style={[styles.actionBtnText, { color: appointment.status === 2 ? c.warning : c.primary }]}>
+              <SymbolView name={currentStatus.icon} size={16} tintColor={appointment.status === 2 ? c.textMuted : c.primary} />
+              <Text style={[styles.actionBtnText, { color: appointment.status === 2 ? c.textMuted : c.primary }]}>
                 {currentStatus.action}
               </Text>
             </>
@@ -1715,124 +1876,206 @@ export default function AppointmentDetailsScreen() {
               <Text style={[styles.cardTitle, { color: c.text }]}>Notes</Text>
             </View>
             <Text style={{ fontSize: 13, fontWeight: '700', color: c.textMuted }}>
-              {appointment.job.notes?.length || 0} items
+              {appointment.job.notes?.length || 0} {appointment.job.notes?.length === 1 ? 'message' : 'messages'}
             </Text>
           </View>
 
-          {/* Notes list */}
+          {/* More messages button */}
+          {(appointment.job.notes && appointment.job.notes.length > 1) && (
+            <Pressable
+              onPress={() => {
+                setFocusNotesInput(false);
+                setNotesModalVisible(true);
+              }}
+              style={({ pressed }) => [
+                styles.moreNotesBtn,
+                pressed && { opacity: 0.7 }
+              ]}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: c.primary }}>More messages</Text>
+            </Pressable>
+          )}
+
+          {/* Notes list - showing only the last message */}
           {(!appointment.job.notes || appointment.job.notes.length === 0) ? (
             <Text style={{ fontSize: 13, fontStyle: 'italic', color: c.textMuted, paddingVertical: 8 }}>
               No notes added yet.
             </Text>
           ) : (
             <View style={styles.notesList}>
-              {appointment.job.notes.map((note) => {
+              {(() => {
+                const note = appointment.job.notes[appointment.job.notes.length - 1];
                 const isSelf = note.creator?.id === user?.id && user?.id !== undefined;
                 return (
-                  <View key={note.id} style={styles.noteItem}>
-                    <View
-                      style={[
-                        styles.noteContent,
-                        isSelf ? styles.noteBubbleSelf : styles.noteBubbleOther,
-                        !isSelf && { backgroundColor: c.primary }
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.noteText,
-                          { color: isSelf ? c.text : '#ffffff' }
-                        ]}
-                      >
-                        {note.text}
-                      </Text>
-                      <View style={styles.noteMeta}>
-                        <Text
-                          style={[
-                            styles.noteAuthor,
-                            { color: isSelf ? c.textMuted : 'rgba(255,255,255,0.7)' }
-                          ]}
-                        >
-                          {note.creator?.name || 'Unknown'}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.noteDate,
-                            { color: isSelf ? c.textMuted : 'rgba(255,255,255,0.7)' }
-                          ]}
-                        >
-                          {formatDate(note.created_at, 'MMM DD, YYYY hh:mm A')}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {canDeleteNote(note) && (
-                      <View style={{ justifyContent: 'center', paddingLeft: 8 }}>
-                        {loadingRemoveNote === note.id ? (
-                          <ActivityIndicator size="small" color={c.danger} />
-                        ) : (
-                          <Pressable
-                            onPress={() => handleRemoveNote(note.id)}
-                            style={({ pressed }) => [
-                              styles.noteDeleteBtn,
-                              pressed && { opacity: 0.6 }
-                            ]}
-                          >
-                            <SymbolView
-                              name={{ ios: 'trash', android: 'delete', web: 'delete' }}
-                              size={16}
-                              tintColor={c.danger}
-                            />
-                          </Pressable>
-                        )}
-                      </View>
-                    )}
-                  </View>
+                  <SwipeableNote
+                    note={note}
+                    isSelf={isSelf}
+                    canDelete={canDeleteNote(note)}
+                    onDelete={handleRemoveNote}
+                    loadingRemove={loadingRemoveNote === note.id}
+                    c={c}
+                    isDark={isDark}
+                    formatDate={formatDate}
+                    setScrollEnabled={setScrollEnabled}
+                  />
                 );
-              })}
+              })()}
             </View>
           )}
 
-          {/* Note Input */}
-          <View style={styles.noteInputContainer}>
-            <TextInput
-              value={newNote}
-              onChangeText={setNewNote}
-              placeholder="Type note here..."
-              placeholderTextColor={c.textMuted}
-              multiline
-              style={[
-                styles.noteInput,
-                {
-                  backgroundColor: c.inputBg,
-                  borderColor: c.cardBorder,
-                  color: c.text,
-                }
-              ]}
+          {/* Note Mock Input */}
+          <Pressable
+            onPress={() => {
+              setFocusNotesInput(true);
+              setNotesModalVisible(true);
+            }}
+            style={({ pressed }) => [
+              styles.mockNoteInput,
+              {
+                backgroundColor: c.inputBg,
+                borderColor: c.cardBorder,
+              },
+              pressed && { opacity: 0.8 }
+            ]}
+          >
+            <Text style={{ color: c.textMuted, fontSize: 13, flex: 1 }}>
+              Type note here...
+            </Text>
+            <SymbolView
+              name={{ ios: 'paperplane.fill', android: 'send', web: 'send' }}
+              size={14}
+              tintColor={c.textMuted}
             />
-            <Pressable
-              onPress={handleSaveNote}
-              disabled={loadingSaveNote || !newNote.trim()}
-              style={({ pressed }) => [
-                styles.noteSendBtn,
-                {
-                  backgroundColor: newNote.trim() ? c.primary : c.inputBg,
-                },
-                pressed && { opacity: 0.8 }
-              ]}
-            >
-              {loadingSaveNote ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <SymbolView
-                  name={{ ios: 'paperplane.fill', android: 'send', web: 'send' }}
-                  size={16}
-                  tintColor={newNote.trim() ? '#ffffff' : c.textMuted}
-                />
-              )}
-            </Pressable>
-          </View>
+          </Pressable>
         </View>
       </Animated.View>
+
+      {/* ═══ MODAL 5: Notes Chat ══════════════════════════════════════════════ */}
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={notesModalVisible}
+        onRequestClose={() => setNotesModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: c.bg }}>
+          {/* Status bar spacer */}
+          <View style={{ height: Platform.OS === 'ios' ? 50 : 20 }} />
+
+          {/* Modal Header */}
+          <View style={styles.chatModalHeader}>
+            <Pressable
+              onPress={() => setNotesModalVisible(false)}
+              hitSlop={15}
+              style={({ pressed }) => [styles.chatCloseBtn, pressed && { opacity: 0.7 }]}
+            >
+              <SymbolView
+                name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+                size={22}
+                tintColor={c.text}
+              />
+            </Pressable>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: c.text }}>Notes</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: c.textMuted }}>
+                {appointment?.job?.notes?.length || 0} {appointment?.job?.notes?.length === 1 ? 'message' : 'messages'}
+              </Text>
+            </View>
+          </View>
+          
+          <View style={[styles.divider, { backgroundColor: c.divider }]} />
+
+          {/* Keyboard avoiding wrapper for the scroll view and input */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1 }}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          >
+            {/* Scrollable list of ALL notes */}
+            <ScrollView
+              ref={scrollViewRef}
+              scrollEnabled={scrollEnabled}
+              keyboardShouldPersistTaps="handled"
+              style={{ flex: 1, paddingHorizontal: 16 }}
+              contentContainerStyle={{ paddingVertical: 12, gap: 10 }}
+              onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+            >
+              {(!appointment?.job?.notes || appointment.job.notes.length === 0) ? (
+                <Text style={{ fontSize: 13, fontStyle: 'italic', color: c.textMuted, alignSelf: 'center', marginTop: 20 }}>
+                  No notes added yet.
+                </Text>
+              ) : (
+                appointment.job.notes.map((note) => {
+                  const isSelf = note.creator?.id === user?.id && user?.id !== undefined;
+                  return (
+                    <SwipeableNote
+                      key={note.id}
+                      note={note}
+                      isSelf={isSelf}
+                      canDelete={canDeleteNote(note)}
+                      onDelete={handleRemoveNote}
+                      loadingRemove={loadingRemoveNote === note.id}
+                      c={c}
+                      isDark={isDark}
+                      formatDate={formatDate}
+                      setScrollEnabled={setScrollEnabled}
+                    />
+                  );
+                })
+              )}
+            </ScrollView>
+
+            {/* Input row at bottom */}
+            <View
+              style={[
+                styles.modalInputContainer,
+                {
+                  borderTopColor: c.divider,
+                  backgroundColor: c.card,
+                  paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+                }
+              ]}
+            >
+              <TextInput
+                value={newNote}
+                onChangeText={setNewNote}
+                placeholder="Type note here..."
+                placeholderTextColor={c.textMuted}
+                multiline
+                autoFocus={focusNotesInput}
+                style={[
+                  styles.noteInput,
+                  {
+                    backgroundColor: c.inputBg,
+                    borderColor: c.cardBorder,
+                    color: c.text,
+                  }
+                ]}
+              />
+              <Pressable
+                onPress={handleSaveNote}
+                disabled={loadingSaveNote || !newNote.trim()}
+                style={({ pressed }) => [
+                  styles.noteSendBtn,
+                  {
+                    backgroundColor: newNote.trim() ? c.primary : c.inputBg,
+                  },
+                  pressed && { opacity: 0.8 }
+                ]}
+              >
+                {loadingSaveNote ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <SymbolView
+                    name={{ ios: 'paperplane.fill', android: 'send', web: 'send' }}
+                    size={16}
+                    tintColor={newNote.trim() ? '#ffffff' : c.textMuted}
+                  />
+                )}
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       {/* ═══ MODAL 1: Create Copy ═════════════════════════════════════════════ */}
       <Modal
@@ -2011,7 +2254,11 @@ export default function AppointmentDetailsScreen() {
               </Pressable>
             </View>
 
-            <ScrollView contentContainerStyle={{ paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              contentContainerStyle={{ paddingBottom: 16 }}
+              showsVerticalScrollIndicator={false}
+              scrollEnabled={payScrollEnabled}
+            >
               {/* Balance summary */}
               <View style={styles.payBalanceRow}>
                 <View style={[styles.payBalanceChip, { backgroundColor: c.dangerMuted }]}>
@@ -2109,6 +2356,7 @@ export default function AppointmentDetailsScreen() {
                     onResponderGrant={onSignatureTouchStart}
                     onResponderMove={onSignatureTouchMove}
                     onResponderRelease={onSignatureTouchEnd}
+                    onResponderTerminate={onSignatureTouchEnd}
                   >
                     {renderSignatureVectors()}
                     {allSignatureLines.length === 0 && currentSignatureLine.length === 0 && (
@@ -3235,7 +3483,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   noteContent: {
-    flex: 1,
     borderRadius: 14,
     padding: 10,
   },
@@ -3273,12 +3520,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  noteInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-  },
   noteInput: {
     flex: 1,
     minHeight: 40,
@@ -3295,5 +3536,44 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  moreNotesBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    marginBottom: 4,
+  },
+  mockNoteInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginTop: 12,
+  },
+  chatModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  chatCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
+  noteItemSwipeContainer: {
+    width: '100%',
   },
 });
