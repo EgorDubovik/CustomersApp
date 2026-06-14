@@ -192,56 +192,56 @@ const styles = StyleSheet.create({
 
 const lightStyles = StyleSheet.create({
 	container: {
-		borderColor: '#e0e6ed',
+		borderColor: '#e2e8f0',
 		backgroundColor: '#ffffff',
 	},
 	switcherBg: {
-		backgroundColor: '#f1f2f3',
+		backgroundColor: '#f1f5f9',
 	},
 	activeTabBg: {
 		backgroundColor: '#ffffff',
 	},
 	activeTabText: {
-		color: '#4361ee',
+		color: '#4f46e5',
 	},
 	inactiveTabText: {
-		color: '#515365',
+		color: '#64748b',
 	},
 	textMain: {
-		color: '#0e1726',
+		color: '#0f172a',
 	},
 	textPrimary: {
-		color: '#4361ee',
+		color: '#4f46e5',
 	},
 	btnBorder: {
-		borderColor: '#4361ee',
+		borderColor: '#e2e8f0',
 	},
 });
 
 const darkStyles = StyleSheet.create({
 	container: {
-		borderColor: '#191e3a',
-		backgroundColor: '#060818',
+		borderColor: '#27272a',
+		backgroundColor: '#09090b',
 	},
 	switcherBg: {
-		backgroundColor: '#1b2e4b',
+		backgroundColor: '#18181b',
 	},
 	activeTabBg: {
-		backgroundColor: '#3b3f5c',
+		backgroundColor: '#27272a',
 	},
 	activeTabText: {
-		color: '#ffffff',
+		color: '#f4f4f5',
 	},
 	inactiveTabText: {
-		color: '#888ea8',
+		color: '#a1a1aa',
 	},
 	textMain: {
-		color: '#f1f2f3',
+		color: '#f4f4f5',
 	},
 	textPrimary: {
-		color: '#805dca',
+		color: '#818cf8',
 	},
 	btnBorder: {
-		borderColor: '#805dca',
+		borderColor: '#27272a',
 	},
 });

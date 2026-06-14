@@ -4,6 +4,7 @@ import { ListViewProps, CalendarEvent } from '../types';
 import { formatDate } from '../utils/TimeHelper';
 import DefaultListItem from './DefaultListItem';
 import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 
 const DATE_GROUP_FORMAT = 'MMM DD';
 
@@ -51,8 +52,8 @@ export default function ListView<T extends any>({
 						<RefreshControl
 							refreshing={refreshing ?? false}
 							onRefresh={onRefresh}
-							tintColor={isDark ? '#805dca' : '#4361ee'}
-							colors={[isDark ? '#805dca' : '#4361ee']}
+							tintColor={Colors[colorScheme].tint}
+							colors={[Colors[colorScheme].tint]}
 						/>
 					) : undefined
 				}
@@ -76,8 +77,8 @@ export default function ListView<T extends any>({
 					<RefreshControl
 						refreshing={refreshing ?? false}
 						onRefresh={onRefresh}
-						tintColor={isDark ? '#805dca' : '#4361ee'}
-						colors={[isDark ? '#805dca' : '#4361ee']}
+						tintColor={Colors[colorScheme].tint}
+						colors={[Colors[colorScheme].tint]}
 					/>
 				) : undefined
 			}
@@ -88,7 +89,7 @@ export default function ListView<T extends any>({
 					return (
 						<View key={`date-group-${groupIndex}`} style={styles.dateGroup}>
 							<View style={styles.dateCol}>
-								<View style={[styles.dateBadge, isToday && styles.todayBadge]}>
+								<View style={[styles.dateBadge, isToday && [styles.todayBadge, { backgroundColor: Colors[colorScheme].tint }]]}>
 									<Text style={[styles.dateText, isToday ? styles.todayText : themeStyles.textMain]}>
 										{group.dateString}
 									</Text>
@@ -173,18 +174,18 @@ const styles = StyleSheet.create({
 
 const lightStyles = StyleSheet.create({
 	textMuted: {
-		color: '#888ea8',
+		color: '#64748b',
 	},
 	textMain: {
-		color: '#3b3f5c',
+		color: '#0f172a',
 	},
 });
 
 const darkStyles = StyleSheet.create({
 	textMuted: {
-		color: '#888ea8',
+		color: '#a1a1aa',
 	},
 	textMain: {
-		color: '#e0e6ed',
+		color: '#f4f4f5',
 	},
 });

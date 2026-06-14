@@ -133,9 +133,9 @@ const palette = {
     divider: 'rgba(0,0,0,0.06)',
     inputBg: 'rgba(0,0,0,0.03)',
     timerItemBg: 'rgba(0,0,0,0.03)',
-    heroGradient: ['#6366F1', '#818CF8'] as [string, string],
-    heroGradientSuccess: ['#059669', '#10B981'] as [string, string],
-    heroGradientWarning: ['#D97706', '#F59E0B'] as [string, string],
+    heroGradient: ['#4f46e5', '#7c3aed'] as [string, string],
+    heroGradientSuccess: ['#10b981', '#06b6d4'] as [string, string],
+    heroGradientWarning: ['#f59e0b', '#ec4899'] as [string, string],
     shadow: '#000',
   },
   dark: {
@@ -156,9 +156,9 @@ const palette = {
     divider: 'rgba(255,255,255,0.06)',
     inputBg: 'rgba(255,255,255,0.05)',
     timerItemBg: 'rgba(255,255,255,0.04)',
-    heroGradient: ['#4338CA', '#6366F1'] as [string, string],
-    heroGradientSuccess: ['#047857', '#059669'] as [string, string],
-    heroGradientWarning: ['#B45309', '#D97706'] as [string, string],
+    heroGradient: ['#3730a3', '#5b21b6'] as [string, string],
+    heroGradientSuccess: ['#047857', '#0891b2'] as [string, string],
+    heroGradientWarning: ['#b45309', '#be185d'] as [string, string],
     shadow: '#000',
   },
 };
@@ -1387,7 +1387,7 @@ export default function AppointmentDetailsScreen() {
       {/* ═══ HERO SECTION ═══════════════════════════════════════════════════════ */}
       <Animated.View entering={FadeInDown.duration(500)}>
         <LinearGradient
-          colors={c.heroGradient}
+          colors={currentStatus.gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.heroSection}

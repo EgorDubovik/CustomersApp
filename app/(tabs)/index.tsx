@@ -11,6 +11,7 @@ import { SymbolView } from 'expo-symbols';
 import { useAuth } from '@/context/AuthContext';
 import { API_URL } from '@/constants/Config';
 import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 import AppointmentsScheduler from '@/components/scheduler/AppointmentsScheduler';
 
 interface ITech {
@@ -160,7 +161,7 @@ export default function TabOneScreen() {
   if (loading && !refreshing) {
     return (
       <View style={[styles.centerContainer, themeStyles.bg]}>
-        <ActivityIndicator size="large" color={isDark ? '#805dca' : '#4361ee'} />
+        <ActivityIndicator size="large" color={Colors[colorScheme].tint} />
         <Text style={[styles.loadingText, themeStyles.textMuted]}>
           Loading schedule...
         </Text>
@@ -211,7 +212,7 @@ export default function TabOneScreen() {
                   web: 'logout',
                 }}
                 size={22}
-                tintColor={isDark ? '#805dca' : '#4361ee'}
+                tintColor={Colors[colorScheme].tint}
               />
             </Pressable>
           ),
@@ -289,30 +290,30 @@ const styles = StyleSheet.create({
 
 const lightStyles = StyleSheet.create({
   bg: {
-    backgroundColor: '#f6f8fa',
+    backgroundColor: '#f8fafc',
   },
   textMuted: {
-    color: '#515365',
+    color: '#64748b',
   },
   textPrimary: {
-    color: '#4361ee',
+    color: '#4f46e5',
   },
   btnBorder: {
-    borderColor: '#4361ee',
+    borderColor: '#e2e8f0',
   },
 });
 
 const darkStyles = StyleSheet.create({
   bg: {
-    backgroundColor: '#060818',
+    backgroundColor: '#09090b',
   },
   textMuted: {
-    color: '#888ea8',
+    color: '#a1a1aa',
   },
   textPrimary: {
-    color: '#805dca',
+    color: '#818cf8',
   },
   btnBorder: {
-    borderColor: '#805dca',
+    borderColor: '#27272a',
   },
 });

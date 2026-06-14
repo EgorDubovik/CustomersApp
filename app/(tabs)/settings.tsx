@@ -4,6 +4,7 @@ import { Text, View } from '@/components/Themed';
 import { SymbolView } from 'expo-symbols';
 import { useSettings, AppTheme, NavigationMap } from '@/context/SettingsContext';
 import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 
 interface SegmentedControlProps<T> {
   options: { label: string; value: T }[];
@@ -15,10 +16,10 @@ function SegmentedControl<T>({ options, selectedValue, onSelect }: SegmentedCont
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const containerBg = isDark ? '#2c2c2e' : '#eef0f3';
-  const activeBg = isDark ? '#3a3a3c' : '#ffffff';
-  const activeText = isDark ? '#ffffff' : '#000000';
-  const inactiveText = isDark ? '#aeaeb2' : '#8e8e93';
+  const containerBg = isDark ? '#27272a' : '#f1f5f9';
+  const activeBg = isDark ? '#3f3f46' : '#ffffff';
+  const activeText = isDark ? '#f4f4f5' : '#0f172a';
+  const inactiveText = isDark ? '#71717a' : '#64748b';
 
   return (
     <View style={[styles.segmentContainer, { backgroundColor: containerBg }]} lightColor="transparent" darkColor="transparent">
@@ -61,20 +62,20 @@ function SettingRow({
   const isDark = colorScheme === 'dark';
 
   return (
-    <View style={styles.row} lightColor="#ffffff" darkColor="#1c1c1e">
+    <View style={styles.row} lightColor="#ffffff" darkColor="#18181b">
       <View style={styles.rowLeft} lightColor="transparent" darkColor="transparent">
         <View
           style={styles.iconContainer}
-          lightColor={isDark ? '#2c2c2e' : '#f0f0f3'}
-          darkColor={isDark ? '#2c2c2e' : '#f0f0f3'}
+          lightColor={isDark ? '#27272a' : '#f1f5f9'}
+          darkColor={isDark ? '#27272a' : '#f1f5f9'}
         >
           <SymbolView
             name={iconName}
             size={18}
-            tintColor={isDark ? '#ffffff' : '#000000'}
+            tintColor={Colors[colorScheme].tint}
           />
         </View>
-        <Text style={styles.rowTitle}>{title}</Text>
+        <Text style={[styles.rowTitle, { color: Colors[colorScheme].text }]}>{title}</Text>
       </View>
       <View style={styles.rowRight} lightColor="transparent" darkColor="transparent">
         {rightElement}
@@ -84,10 +85,17 @@ function SettingRow({
 }
 
 function SettingSection({ title, children }: { title: string; children: React.ReactNode }) {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
   return (
     <View style={styles.section} lightColor="transparent" darkColor="transparent">
-      <Text style={styles.sectionHeader}>{title}</Text>
-      <View style={styles.sectionCard} lightColor="#ffffff" darkColor="#1c1c1e">
+      <Text style={[styles.sectionHeader, { color: isDark ? '#71717a' : '#64748b' }]}>{title}</Text>
+      <View
+        style={[styles.sectionCard, { borderColor: isDark ? '#27272a' : '#e2e8f0', borderWidth: 1 }]}
+        lightColor="#ffffff"
+        darkColor="#18181b"
+      >
         {React.Children.map(children, (child, index) => {
           const isLast = index === React.Children.count(children) - 1;
           return (
@@ -96,8 +104,8 @@ function SettingSection({ title, children }: { title: string; children: React.Re
               {!isLast && (
                 <View
                   style={styles.rowSeparator}
-                  lightColor="#e5e5ea"
-                  darkColor="#38383a"
+                  lightColor="#e2e8f0"
+                  darkColor="#27272a"
                 />
               )}
             </View>
@@ -110,6 +118,8 @@ function SettingSection({ title, children }: { title: string; children: React.Re
 
 export default function SettingsScreen() {
   const { theme, setTheme, navigationMap, setNavigationMap } = useSettings();
+  const colorScheme = useColorScheme();
+  const bg = Colors[colorScheme].background;
 
   const themeOptions: { label: string; value: AppTheme }[] = [
     { label: 'System', value: 'system' },
@@ -124,7 +134,7 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: bg }]}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >

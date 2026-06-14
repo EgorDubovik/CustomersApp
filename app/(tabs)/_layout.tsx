@@ -8,28 +8,62 @@ import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const activeColor = Colors[colorScheme].tint;
+  const inactiveColor = Colors[colorScheme].tabIconDefault;
+  const cardBg = Colors[colorScheme].card;
+  const border = Colors[colorScheme].border;
+  const headerBg = Colors[colorScheme].background;
+  const textColor = Colors[colorScheme].text;
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
+        tabBarActiveTintColor: activeColor,
+        tabBarInactiveTintColor: inactiveColor,
         headerShown: useClientOnlyValue(false, true),
+        headerStyle: {
+          backgroundColor: headerBg,
+          borderBottomWidth: 1,
+          borderBottomColor: border,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+        headerTitleStyle: {
+          fontWeight: '800',
+          fontSize: 20,
+          color: textColor,
+        },
+        tabBarStyle: {
+          backgroundColor: cardBg,
+          borderTopWidth: 1,
+          borderTopColor: border,
+          elevation: 0,
+          shadowOpacity: 0,
+          ...Platform.select({
+            ios: {
+              height: 88,
+              paddingBottom: 30,
+            },
+            android: {
+              height: 64,
+              paddingBottom: 10,
+            },
+          }),
+        },
       }}>
       <Tabs.Screen
         name="customers"
         options={{
           title: 'Customers',
-          tabBarIcon: ({ color }) => (
+          tabBarIcon: ({ color, focused }) => (
             <SymbolView
               name={{
-                ios: 'person.3.fill',
+                ios: focused ? 'person.3.fill' : 'person.3',
                 android: 'people',
                 web: 'people',
               }}
               tintColor={color}
-              size={28}
+              size={24}
             />
           ),
         }}
@@ -38,15 +72,15 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Schedule',
-          tabBarIcon: ({ color }) => (
+          tabBarIcon: ({ color, focused }) => (
             <SymbolView
               name={{
-                ios: 'calendar',
+                ios: focused ? 'calendar.badge.clock' : 'calendar',
                 android: 'calendar_today',
                 web: 'calendar_today',
               }}
               tintColor={color}
-              size={28}
+              size={24}
             />
           ),
           headerRight: () => (
@@ -55,9 +89,9 @@ export default function TabLayout() {
                 {({ pressed }) => (
                   <SymbolView
                     name={{ ios: 'info.circle', android: 'info', web: 'info' }}
-                    size={25}
-                    tintColor={Colors[colorScheme].text}
-                    style={{ opacity: pressed ? 0.5 : 1 }}
+                    size={22}
+                    tintColor={textColor}
+                    style={{ opacity: pressed ? 0.6 : 1 }}
                   />
                 )}
               </Pressable>
@@ -69,15 +103,15 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color }) => (
+          tabBarIcon: ({ color, focused }) => (
             <SymbolView
               name={{
-                ios: 'gearshape.fill',
+                ios: focused ? 'gearshape.fill' : 'gearshape',
                 android: 'settings',
                 web: 'settings',
               }}
               tintColor={color}
-              size={28}
+              size={24}
             />
           ),
         }}
@@ -85,3 +119,4 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+

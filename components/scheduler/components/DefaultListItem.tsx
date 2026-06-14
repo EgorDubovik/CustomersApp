@@ -22,9 +22,9 @@ export default function DefaultListItem<T extends CalendarEvent>({
 	const bgColor = event.color || defaultAppointmentBgColor;
 	const isCompleted = event.data?.status === 2;
 
-	const completedBgColor = isDark ? '#2c2c2e' : '#e5e7eb';
-	const completedTitleColor = isDark ? '#a1a1aa' : '#000000';
-	const completedTimeColor = isDark ? '#71717a' : '#4b5563';
+	const completedBgColor = isDark ? '#27272a' : '#f1f5f9';
+	const completedTitleColor = isDark ? '#71717a' : '#94a3b8';
+	const completedTimeColor = isDark ? '#71717a' : '#94a3b8';
 
 	return (
 		<Pressable
@@ -32,7 +32,11 @@ export default function DefaultListItem<T extends CalendarEvent>({
 			style={({ pressed }) => [
 				styles.card,
 				isCompleted ? { backgroundColor: completedBgColor } : themeStyles.cardBg,
-				{ borderLeftColor: bgColor, opacity: pressed ? 0.8 : 1 },
+				{
+					borderLeftColor: bgColor,
+					borderColor: isDark ? '#27272a' : '#e2e8f0',
+					opacity: pressed ? 0.8 : 1,
+				},
 			]}
 		>
 			<View style={styles.content}>
@@ -66,14 +70,15 @@ const styles = StyleSheet.create({
 		paddingVertical: 12,
 		paddingHorizontal: 16,
 		borderRadius: 8,
+		borderWidth: 1,
 		borderLeftWidth: 4,
 		marginVertical: 4,
 		marginHorizontal: 16,
 		shadowColor: '#000',
 		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.05,
-		shadowRadius: 3,
-		elevation: 2,
+		shadowOpacity: 0.02,
+		shadowRadius: 6,
+		elevation: 1,
 	},
 	content: {
 		flex: 1,
@@ -99,21 +104,21 @@ const lightStyles = StyleSheet.create({
 		backgroundColor: '#ffffff',
 	},
 	titleText: {
-		color: '#0e1726',
+		color: '#0f172a',
 	},
 	timeText: {
-		color: '#515365',
+		color: '#64748b',
 	},
 });
 
 const darkStyles = StyleSheet.create({
 	cardBg: {
-		backgroundColor: '#1b2e4b',
+		backgroundColor: '#18181b',
 	},
 	titleText: {
-		color: '#f1f2f3',
+		color: '#f4f4f5',
 	},
 	timeText: {
-		color: '#888ea8',
+		color: '#a1a1aa',
 	},
 });

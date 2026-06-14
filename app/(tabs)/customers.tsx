@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/context/AuthContext';
 import { API_URL } from '@/constants/Config';
 import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 
 interface ICustomer {
   id: number;
@@ -259,7 +260,7 @@ export default function CustomersScreen() {
               <SymbolView
                 name={{ ios: 'plus', android: 'add', web: 'add' }}
                 size={24}
-                tintColor={isDark ? '#805dca' : '#4361ee'}
+                tintColor={Colors[colorScheme].tint}
               />
             </Pressable>
           ),
@@ -269,7 +270,7 @@ export default function CustomersScreen() {
       <View style={styles.listContainer}>
         {loading && customers.length === 0 ? (
           <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={isDark ? '#805dca' : '#4361ee'} />
+            <ActivityIndicator size="large" color={Colors[colorScheme].tint} />
           </View>
         ) : error ? (
           <View style={styles.centerContainer}>
@@ -315,7 +316,7 @@ export default function CustomersScreen() {
             autoCorrect={false}
           />
           {loading && searchQuery.length > 0 && (
-            <ActivityIndicator size="small" color={isDark ? '#805dca' : '#4361ee'} style={styles.searchLoading} />
+            <ActivityIndicator size="small" color={Colors[colorScheme].tint} style={styles.searchLoading} />
           )}
         </View>
       </View>
@@ -341,29 +342,38 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   card: {
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
-    marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 3,
+    marginBottom: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.02,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 1,
+      },
+      web: {
+        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+      },
+    }),
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     color: '#ffffff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -373,9 +383,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   cardFooter: {
     flexDirection: 'row',
@@ -389,7 +399,7 @@ const styles = StyleSheet.create({
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 3,
+    marginTop: 2,
   },
   infoText: {
     fontSize: 13,
@@ -408,7 +418,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   searchContainer: {
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderTopWidth: 1,
   },
   inputWrapper: {
@@ -422,11 +433,11 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    height: 44,
-    borderRadius: 22,
-    paddingLeft: 40,
-    paddingRight: 40,
-    fontSize: 16,
+    height: 40,
+    borderRadius: 8,
+    paddingLeft: 38,
+    paddingRight: 38,
+    fontSize: 15,
   },
   searchLoading: {
     position: 'absolute',
@@ -443,30 +454,31 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '500',
   },
 });
 
 const lightStyles = StyleSheet.create({
-  bg: { backgroundColor: '#f6f8fa' },
+  bg: { backgroundColor: '#f8fafc' },
   cardBg: { backgroundColor: '#ffffff' },
-  cardBorder: { borderWidth: 1, borderColor: 'rgba(0,0,0,0.03)' },
+  cardBorder: { borderWidth: 1, borderColor: '#e2e8f0' },
   searchBg: { backgroundColor: '#ffffff' },
-  searchBorder: { borderColor: 'rgba(0,0,0,0.05)' },
-  inputBg: { backgroundColor: '#f1f2f3' },
-  textTitle: { color: '#0e1726' },
-  textMuted: { color: '#515365' },
+  searchBorder: { borderColor: '#e2e8f0' },
+  inputBg: { backgroundColor: '#f1f5f9' },
+  textTitle: { color: '#0f172a' },
+  textMuted: { color: '#64748b' },
   textTimeMuted: { color: '#94a3b8' },
 });
 
 const darkStyles = StyleSheet.create({
-  bg: { backgroundColor: '#060818' },
-  cardBg: { backgroundColor: '#0e1726' },
-  cardBorder: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  searchBg: { backgroundColor: '#0e1726' },
-  searchBorder: { borderColor: 'rgba(255,255,255,0.06)' },
-  inputBg: { backgroundColor: '#1b2e4b' },
-  textTitle: { color: '#bfc9d4' },
-  textMuted: { color: '#888ea8' },
-  textTimeMuted: { color: '#64748b' },
+  bg: { backgroundColor: '#09090b' },
+  cardBg: { backgroundColor: '#18181b' },
+  cardBorder: { borderWidth: 1, borderColor: '#27272a' },
+  searchBg: { backgroundColor: '#18181b' },
+  searchBorder: { borderColor: '#27272a' },
+  inputBg: { backgroundColor: '#27272a' },
+  textTitle: { color: '#f4f4f5' },
+  textMuted: { color: '#a1a1aa' },
+  textTimeMuted: { color: '#71717a' },
 });
