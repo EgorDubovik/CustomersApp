@@ -1223,22 +1223,7 @@ export default function AppointmentDetailsScreen() {
     setShowSuggestions(false);
   };
 
-  // Stepper handlers for copy modal Date/Time
-  const changeCopyDay = (amount: number) => {
-    setCopyDate(prev => {
-      const newD = new Date(prev.getTime());
-      newD.setDate(newD.getDate() + amount);
-      return newD;
-    });
-  };
 
-  const changeCopyHour = (amount: number) => {
-    setCopyDate(prev => {
-      const newD = new Date(prev.getTime());
-      newD.setHours(newD.getHours() + amount);
-      return newD;
-    });
-  };
 
   // ─── Touch Signature Canvas Handlers ────────────────────────────────────────
 
@@ -2197,47 +2182,21 @@ export default function AppointmentDetailsScreen() {
               </Pressable>
             </View>
 
-            {/* Date Stepper */}
+            {/* Date & Time Selector */}
             <View style={{ gap: 16 }}>
               <View style={{ gap: 6 }}>
-                <Text style={[styles.stepperLabel, { color: c.textMuted }]}>Date</Text>
-                <View style={[styles.stepperRow, { backgroundColor: c.inputBg }]}>
-                  <Pressable
-                    onPress={() => changeCopyDay(-1)}
-                    style={({ pressed }) => [styles.stepperBtn, { backgroundColor: c.primary }, pressed && { opacity: 0.8 }]}
-                  >
-                    <Text style={styles.stepperBtnText}>−</Text>
-                  </Pressable>
-                  <Text style={[styles.stepperValText, { color: c.text }]}>
-                    {formatDate(copyDate, 'MMM DD, YYYY')}
-                  </Text>
-                  <Pressable
-                    onPress={() => changeCopyDay(1)}
-                    style={({ pressed }) => [styles.stepperBtn, { backgroundColor: c.primary }, pressed && { opacity: 0.8 }]}
-                  >
-                    <Text style={styles.stepperBtnText}>+</Text>
-                  </Pressable>
-                </View>
-              </View>
-
-              <View style={{ gap: 6 }}>
-                <Text style={[styles.stepperLabel, { color: c.textMuted }]}>Time</Text>
-                <View style={[styles.stepperRow, { backgroundColor: c.inputBg }]}>
-                  <Pressable
-                    onPress={() => changeCopyHour(-1)}
-                    style={({ pressed }) => [styles.stepperBtn, { backgroundColor: c.primary }, pressed && { opacity: 0.8 }]}
-                  >
-                    <Text style={styles.stepperBtnText}>−</Text>
-                  </Pressable>
-                  <Text style={[styles.stepperValText, { color: c.text }]}>
-                    {formatDate(copyDate, 'hh:00 A')}
-                  </Text>
-                  <Pressable
-                    onPress={() => changeCopyHour(1)}
-                    style={({ pressed }) => [styles.stepperBtn, { backgroundColor: c.primary }, pressed && { opacity: 0.8 }]}
-                  >
-                    <Text style={styles.stepperBtnText}>+</Text>
-                  </Pressable>
+                <Text style={[styles.stepperLabel, { color: c.textMuted }]}>Start Date & Time</Text>
+                <View style={{ backgroundColor: isDark ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.02)', borderRadius: 12, padding: 8 }}>
+                  <DateTimePicker
+                    value={copyDate}
+                    mode="datetime"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onValueChange={(event: any, selectedDate?: Date) => {
+                      if (selectedDate) setCopyDate(selectedDate);
+                    }}
+                    textColor={isDark ? '#F1F5F9' : '#1E293B'}
+                    style={{ height: 200, width: '100%' }}
+                  />
                 </View>
               </View>
 
@@ -2417,7 +2376,7 @@ export default function AppointmentDetailsScreen() {
                   value={selectedEditTab === 'timeFrom' ? editTimeFrom : editTimeTo}
                   mode="datetime"
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={onEditTimeChange}
+                  onValueChange={onEditTimeChange}
                   textColor={isDark ? '#F1F5F9' : '#1E293B'}
                   style={{ height: 200, width: '100%' }}
                 />
