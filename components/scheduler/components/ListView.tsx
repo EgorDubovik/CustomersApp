@@ -42,6 +42,41 @@ export default function ListView<T extends any>({
 			}));
 	}, [events]);
 
+	const { flatList, stickyIndices } = useMemo(() => {
+		const list: Array<
+			| { type: 'header'; key: string; month: string; day: string; isToday: boolean }
+			| { type: 'event'; key: string; event: CalendarEvent<T>; isFirstOfGroup: boolean }
+		> = [];
+		const stickyIndices: number[] = [];
+
+		const todayKey = formatDate(new Date(), 'YYYY-MM-DD');
+
+		groupByDate.forEach((group, groupIndex) => {
+			const dateKey = formatDate(group.date, 'YYYY-MM-DD');
+			const isToday = dateKey === todayKey;
+
+			stickyIndices.push(list.length);
+			list.push({
+				type: 'header',
+				key: `header-${groupIndex}-${dateKey}`,
+				month: formatDate(group.date, 'MMM'),
+				day: formatDate(group.date, 'D'),
+				isToday,
+			});
+
+			group.events.forEach((event, eventIndex) => {
+				list.push({
+					type: 'event',
+					key: `event-${event.id}-${eventIndex}`,
+					event,
+					isFirstOfGroup: eventIndex === 0,
+				});
+			});
+		});
+
+		return { flatList: list, stickyIndices };
+	}, [groupByDate]);
+
 	if (events.length === 0) {
 		return (
 			<ScrollView
@@ -65,13 +100,12 @@ export default function ListView<T extends any>({
 		);
 	}
 
-	const today = formatDate(new Date(), DATE_GROUP_FORMAT);
-
 	return (
 		<ScrollView
 			style={styles.container}
 			contentContainerStyle={styles.scrollContent}
 			showsVerticalScrollIndicator={false}
+			stickyHeaderIndices={stickyIndices}
 			refreshControl={
 				onRefresh ? (
 					<RefreshControl
@@ -83,38 +117,52 @@ export default function ListView<T extends any>({
 				) : undefined
 			}
 		>
-			<View style={styles.list}>
-				{groupByDate.map((group, groupIndex) => {
-					const isToday = group.dateString === today;
+			{flatList.map((item) => {
+				if (item.type === 'header') {
 					return (
-						<View key={`date-group-${groupIndex}`} style={styles.dateGroup}>
+						<View key={item.key} style={styles.stickyHeaderContainer} pointerEvents="box-none">
 							<View style={styles.dateCol}>
-								<View style={[styles.dateBadge, isToday && [styles.todayBadge, { backgroundColor: Colors[colorScheme].tint }]]}>
-									<Text style={[styles.dateText, isToday ? styles.todayText : themeStyles.textMain]}>
-										{group.dateString}
+								<View style={[
+									styles.dateBadge,
+									themeStyles.badgeBg,
+									item.isToday && [styles.todayBadge, { backgroundColor: Colors[colorScheme].tint }]
+								]}>
+									<Text style={[styles.monthText, item.isToday ? styles.todayText : themeStyles.textMuted]}>
+										{item.month}
+									</Text>
+									<Text style={[styles.dayText, item.isToday ? styles.todayText : themeStyles.textMain]}>
+										{item.day}
 									</Text>
 								</View>
 							</View>
+						</View>
+					);
+				} else {
+					const event = item.event;
+					return (
+						<View
+							key={item.key}
+							style={[
+								styles.eventRow,
+								item.isFirstOfGroup && styles.firstEventRow
+							]}
+						>
+							<View style={styles.dateColPlaceholder} />
 							<View style={styles.itemsCol}>
-								{group.events.map((event, index) =>
-									renderListItem ? (
-										<View key={`${event.id}-${index}`}>
-											{renderListItem(event)}
-										</View>
-									) : (
-										<DefaultListItem
-											key={`${event.id}-${index}`}
-											event={event}
-											defaultAppointmentBgColor={defaultAppointmentBgColor}
-											onPress={() => onAppointmentClick?.(event)}
-										/>
-									)
+								{renderListItem ? (
+									renderListItem(event)
+								) : (
+									<DefaultListItem
+										event={event}
+										defaultAppointmentBgColor={defaultAppointmentBgColor}
+										onPress={() => onAppointmentClick?.(event)}
+									/>
 								)}
 							</View>
 						</View>
 					);
-				})}
-			</View>
+				}
+			})}
 		</ScrollView>
 	);
 }
@@ -124,7 +172,7 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	scrollContent: {
-		paddingVertical: 12,
+		paddingBottom: 24,
 	},
 	emptyContainer: {
 		flex: 1,
@@ -136,32 +184,48 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		fontWeight: '600',
 	},
-	list: {
-		gap: 20,
-	},
-	dateGroup: {
+	stickyHeaderContainer: {
 		flexDirection: 'row',
 		paddingRight: 16,
+		paddingTop: 12,
+		zIndex: 10,
+		height: 56,
+	},
+	eventRow: {
+		flexDirection: 'row',
+		paddingRight: 16,
+		marginBottom: 8,
+	},
+	firstEventRow: {
+		marginTop: -44, // Align with the top of the date badge (header height 56 minus paddingTop 12)
 	},
 	dateCol: {
-		width: 70,
+		width: 58,
 		alignItems: 'center',
-		paddingTop: 8,
+	},
+	dateColPlaceholder: {
+		width: 58,
 	},
 	dateBadge: {
-		paddingVertical: 6,
-		paddingHorizontal: 8,
-		borderRadius: 6,
+		width: 44,
+		height: 44,
+		borderRadius: 8,
 		alignItems: 'center',
 		justifyContent: 'center',
 	},
 	todayBadge: {
 		backgroundColor: '#4361ee',
 	},
-	dateText: {
-		fontSize: 12,
+	monthText: {
+		fontSize: 10,
+		fontWeight: '600',
+		textTransform: 'uppercase',
+		letterSpacing: 0.5,
+	},
+	dayText: {
+		fontSize: 15,
 		fontWeight: '700',
-		textAlign: 'center',
+		marginTop: 1,
 	},
 	todayText: {
 		color: '#ffffff',
@@ -179,6 +243,9 @@ const lightStyles = StyleSheet.create({
 	textMain: {
 		color: '#0f172a',
 	},
+	badgeBg: {
+		backgroundColor: '#f1f5f9',
+	},
 });
 
 const darkStyles = StyleSheet.create({
@@ -187,5 +254,8 @@ const darkStyles = StyleSheet.create({
 	},
 	textMain: {
 		color: '#f4f4f5',
+	},
+	badgeBg: {
+		backgroundColor: '#18181b',
 	},
 });

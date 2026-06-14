@@ -237,8 +237,8 @@ export default function TabOneScreen() {
           router.push(`/appointment/${event.id}` as any);
         }}
         filterEvent={(event) => {
-          // Show completed appointments (status 2) on mobile as requested, colored differently
-          return true;
+          // Show only active appointments (status !== 2) in list view
+          return event.data?.status !== 2;
         }}
       />
     </View>
