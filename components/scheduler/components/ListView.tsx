@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, RefreshControl } from 'react-native';
 import { ListViewProps, CalendarEvent } from '../types';
 import { formatDate } from '../utils/TimeHelper';
@@ -42,14 +42,43 @@ export default function ListView<T extends any>({
 			}));
 	}, [events]);
 
+	const todayKey = useMemo(() => formatDate(new Date(), 'YYYY-MM-DD'), []);
+
+	const todayHeaderKey = useMemo(() => {
+		const todayGroupIndex = groupByDate.findIndex((group) => {
+			const dateKey = formatDate(group.date, 'YYYY-MM-DD');
+			return dateKey === todayKey;
+		});
+		if (todayGroupIndex !== -1) {
+			const group = groupByDate[todayGroupIndex];
+			const dateKey = formatDate(group.date, 'YYYY-MM-DD');
+			return `header-${todayGroupIndex}-${dateKey}`;
+		}
+		const nextGroupIndex = groupByDate.findIndex((group) => {
+			const dateKey = formatDate(group.date, 'YYYY-MM-DD');
+			return dateKey >= todayKey;
+		});
+		if (nextGroupIndex !== -1) {
+			const group = groupByDate[nextGroupIndex];
+			const dateKey = formatDate(group.date, 'YYYY-MM-DD');
+			return `header-${nextGroupIndex}-${dateKey}`;
+		}
+		return null;
+	}, [groupByDate, todayKey]);
+
+	const scrollViewRef = useRef<ScrollView>(null);
+	const hasScrolledRef = useRef(false);
+
+	useEffect(() => {
+		hasScrolledRef.current = false;
+	}, [events, todayHeaderKey]);
+
 	const { flatList, stickyIndices } = useMemo(() => {
 		const list: Array<
 			| { type: 'header'; key: string; month: string; day: string; isToday: boolean }
 			| { type: 'event'; key: string; event: CalendarEvent<T>; isFirstOfGroup: boolean }
 		> = [];
 		const stickyIndices: number[] = [];
-
-		const todayKey = formatDate(new Date(), 'YYYY-MM-DD');
 
 		groupByDate.forEach((group, groupIndex) => {
 			const dateKey = formatDate(group.date, 'YYYY-MM-DD');
@@ -75,7 +104,7 @@ export default function ListView<T extends any>({
 		});
 
 		return { flatList: list, stickyIndices };
-	}, [groupByDate]);
+	}, [groupByDate, todayKey]);
 
 	if (events.length === 0) {
 		return (
@@ -102,6 +131,7 @@ export default function ListView<T extends any>({
 
 	return (
 		<ScrollView
+			ref={scrollViewRef}
 			style={styles.container}
 			contentContainerStyle={styles.scrollContent}
 			showsVerticalScrollIndicator={false}
@@ -120,7 +150,20 @@ export default function ListView<T extends any>({
 			{flatList.map((item) => {
 				if (item.type === 'header') {
 					return (
-						<View key={item.key} style={styles.stickyHeaderContainer} pointerEvents="box-none">
+						<View
+							key={item.key}
+							style={styles.stickyHeaderContainer}
+							pointerEvents="box-none"
+							onLayout={(event) => {
+								const { y } = event.nativeEvent.layout;
+								if (item.key === todayHeaderKey && !hasScrolledRef.current) {
+									hasScrolledRef.current = true;
+									setTimeout(() => {
+										scrollViewRef.current?.scrollTo({ y, animated: false });
+									}, 100);
+								}
+							}}
+						>
 							<View style={styles.dateCol}>
 								<View style={[
 									styles.dateBadge,
