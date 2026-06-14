@@ -1640,44 +1640,61 @@ export default function AppointmentDetailsScreen() {
         <View style={[styles.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
           {/* Client profile row */}
           <View style={styles.clientProfileRow}>
-            <AvatarInitials name={customerName} size={48} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <Text style={{ fontSize: 16, fontWeight: '800', color: c.text, flex: 1 }} numberOfLines={1}>
-                  {customerName}
-                </Text>
-                {appointment.job.customer && (
-                  <Pressable
-                    onPress={() => {
-                      router.push({
-                        pathname: '/customer/edit',
-                        params: {
-                          id: appointment.job.customer!.id,
-                          name: appointment.job.customer!.name,
-                          phone: appointment.job.customer!.phone || '',
-                          email: appointment.job.customer!.email || '',
-                        },
-                      });
-                    }}
-                    style={({ pressed }) => [styles.clientEditBtn, pressed && { opacity: 0.6 }]}
-                    hitSlop={8}
-                  >
-                    <SymbolView
-                      name={{ ios: 'square.and.pencil', android: 'edit', web: 'edit' }}
-                      size={18}
-                      tintColor={c.primary}
-                    />
-                  </Pressable>
-                )}
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <View style={[styles.miniChip, { backgroundColor: c.primaryMuted }]}>
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: c.primary }}>
-                    {appointment.job.customer?.jobsCount ?? 0} jobs
+            {appointment.job.customer ? (
+              <Pressable
+                onPress={() => router.push(`/customer/${appointment.job.customer!.id}`)}
+                style={({ pressed }) => [
+                  { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
+                  pressed && { opacity: 0.75 }
+                ]}
+              >
+                <AvatarInitials name={customerName} size={48} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: c.text }} numberOfLines={1}>
+                    {customerName}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={[styles.miniChip, { backgroundColor: c.primaryMuted }]}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: c.primary }}>
+                        {appointment.job.customer?.jobsCount ?? 0} jobs
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </Pressable>
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 }}>
+                <AvatarInitials name={customerName} size={48} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: c.text }} numberOfLines={1}>
+                    {customerName}
                   </Text>
                 </View>
               </View>
-            </View>
+            )}
+            {appointment.job.customer && (
+              <Pressable
+                onPress={() => {
+                  router.push({
+                    pathname: '/customer/edit',
+                    params: {
+                      id: appointment.job.customer!.id,
+                      name: appointment.job.customer!.name,
+                      phone: appointment.job.customer!.phone || '',
+                      email: appointment.job.customer!.email || '',
+                    },
+                  });
+                }}
+                style={({ pressed }) => [styles.clientEditBtn, pressed && { opacity: 0.6 }]}
+                hitSlop={8}
+              >
+                <SymbolView
+                  name={{ ios: 'square.and.pencil', android: 'edit', web: 'edit' }}
+                  size={18}
+                  tintColor={c.primary}
+                />
+              </Pressable>
+            )}
           </View>
 
           {/* Client Details (Phone, Email, Address) */}

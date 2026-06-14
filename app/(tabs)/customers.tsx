@@ -171,7 +171,15 @@ export default function CustomersScreen() {
     const relativeTime = getRelativeTime(dateStr);
 
     return (
-      <View style={[styles.card, themeStyles.cardBg, themeStyles.cardBorder]}>
+      <Pressable
+        onPress={() => router.push(`/customer/${item.id}`)}
+        style={({ pressed }) => [
+          styles.card,
+          themeStyles.cardBg,
+          themeStyles.cardBorder,
+          pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }
+        ]}
+      >
         <View style={styles.cardHeader}>
           <LinearGradient
             colors={avatarGradient}
@@ -235,7 +243,7 @@ export default function CustomersScreen() {
             </Text>
           </View>
         ) : null}
-      </View>
+      </Pressable>
     );
   };
 
