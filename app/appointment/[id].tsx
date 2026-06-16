@@ -982,29 +982,33 @@ export default function AppointmentDetailsScreen() {
                   <Text style={{ fontSize: 11, fontWeight: '700', color: c.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                     Payment History
                   </Text>
-                  {appointment.job.payments.map((payment: IPayment, idx: number) => (
-                    <View
-                      key={payment.id}
-                      style={[
-                        styles.paymentRow,
-                        {
-                          backgroundColor: idx % 2 === 0 ? c.inputBg : 'transparent',
-                        },
-                      ]}
-                    >
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: c.text }}>
-                          {payment.type_text || 'Payment'}
-                        </Text>
-                        <Text style={{ fontSize: 11, color: c.textMuted }}>
-                          {formatDate(payment.created_at, 'MMM DD, YYYY hh:mm A')}
+                  {appointment.job.payments.map((payment: IPayment, idx: number) => {
+                    const amountVal = parseFloat(payment.amount);
+                    const isNegative = amountVal < 0;
+                    return (
+                      <View
+                        key={payment.id}
+                        style={[
+                          styles.paymentRow,
+                          {
+                            backgroundColor: idx % 2 === 0 ? c.inputBg : 'transparent',
+                          },
+                        ]}
+                      >
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: c.text }}>
+                            {payment.type_text || 'Payment'}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: c.textMuted }}>
+                            {formatDate(payment.created_at, 'MMM DD, YYYY hh:mm A')}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: isNegative ? c.danger : c.success }}>
+                          {isNegative ? '-' : '+'}${Math.abs(amountVal).toFixed(2)}
                         </Text>
                       </View>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: c.success }}>
-                        +${parseFloat(payment.amount).toFixed(2)}
-                      </Text>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
               </>
             )}
