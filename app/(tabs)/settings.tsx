@@ -1,10 +1,11 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Pressable, Platform } from 'react-native';
 import { Text, View } from '@/components/Themed';
-import { SymbolView } from 'expo-symbols';
-import { useSettings, AppTheme, NavigationMap } from '@/context/SettingsContext';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
+import { useAuth } from '@/context/AuthContext';
+import { AppTheme, NavigationMap, useSettings } from '@/context/SettingsContext';
+import { SymbolView } from 'expo-symbols';
+import React from 'react';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
 
 interface SegmentedControlProps<T> {
   options: { label: string; value: T }[];
@@ -118,8 +119,10 @@ function SettingSection({ title, children }: { title: string; children: React.Re
 
 export default function SettingsScreen() {
   const { theme, setTheme, navigationMap, setNavigationMap } = useSettings();
+  const { logout } = useAuth();
   const colorScheme = useColorScheme();
   const bg = Colors[colorScheme].background;
+  const isDark = colorScheme === 'dark';
 
   const themeOptions: { label: string; value: AppTheme }[] = [
     { label: 'System', value: 'system' },
@@ -131,6 +134,17 @@ export default function SettingsScreen() {
     { label: 'Apple', value: 'apple' },
     { label: 'Google', value: 'google' },
   ];
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out of your account?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Log Out', onPress: logout, style: 'destructive' },
+      ]
+    );
+  };
 
   return (
     <ScrollView
@@ -172,6 +186,38 @@ export default function SettingsScreen() {
             />
           }
         />
+      </SettingSection>
+
+      <SettingSection title="Account">
+        <Pressable
+          onPress={handleLogout}
+          style={({ pressed }) => [
+            styles.row,
+            { backgroundColor: isDark ? '#18181b' : '#ffffff' },
+            pressed && { opacity: 0.7 }
+          ]}
+        >
+          <View style={styles.rowLeft} lightColor="transparent" darkColor="transparent">
+            <View
+              style={styles.iconContainer}
+              lightColor={isDark ? '#27272a' : '#f1f5f9'}
+              darkColor={isDark ? '#27272a' : '#f1f5f9'}
+            >
+              <SymbolView
+                name={{
+                  ios: 'rectangle.portrait.and.arrow.right',
+                  android: 'logout',
+                  web: 'logout',
+                }}
+                size={18}
+                tintColor="#ef4444"
+              />
+            </View>
+            <Text style={[styles.rowTitle, { color: '#ef4444', fontWeight: '600' }]}>
+              Log out from account
+            </Text>
+          </View>
+        </Pressable>
       </SettingSection>
     </ScrollView>
   );

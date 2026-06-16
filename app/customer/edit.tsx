@@ -42,6 +42,9 @@ export default function EditCustomerScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const themeStyles = isDark ? darkStyles : lightStyles;
+  const c = {
+    primary: isDark ? '#818CF8' : '#007aff',
+  };
 
   // Refactored state to hold full customer details (matching web version)
   const [customer, setCustomer] = useState<{
@@ -264,6 +267,7 @@ export default function EditCustomerScreen() {
                 ...prev,
                 addresses: prev.addresses.filter(addr => addr.id !== addressId),
               }));
+              setAddressModalVisible(false);
             } catch (err: any) {
               console.error(err);
               Alert.alert('Error', err.message || 'Failed to delete address.');
@@ -385,22 +389,6 @@ export default function EditCustomerScreen() {
                           {address.full || `${address.line1}, ${address.city}`}
                         </Text>
                       </Pressable>
-
-                      {removeAddressLoading === address.id ? (
-                        <ActivityIndicator size="small" color="#ff3b30" style={{ paddingHorizontal: 12 }} />
-                      ) : (
-                        <Pressable
-                          onPress={() => handleRemoveAddress(address.id)}
-                          style={styles.deleteAddressBtn}
-                          hitSlop={8}
-                        >
-                          <SymbolView
-                            name={{ ios: 'trash', android: 'delete', web: 'delete' }}
-                            size={18}
-                            tintColor="#ff3b30"
-                          />
-                        </Pressable>
-                      )}
                     </View>
                   </View>
                 ))
@@ -450,118 +438,167 @@ export default function EditCustomerScreen() {
         visible={addressModalVisible}
         onRequestClose={() => setAddressModalVisible(false)}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setAddressModalVisible(false)}>
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={[styles.modalCard, { backgroundColor: isDark ? '#1c1c1e' : '#ffffff', width: '100%' }]}
-          >
-            {/* Header */}
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, themeStyles.textTitle]}>
-                {dataAddress.id ? 'Edit Address' : 'Add New Address'}
-              </Text>
-              <Pressable
-                onPress={() => setAddressModalVisible(false)}
-                hitSlop={15}
-                style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)' }]}
-              >
-                <SymbolView
-                  name={{ ios: 'xmark', android: 'close', web: 'close' }}
-                  size={14}
-                  tintColor={isDark ? '#8e8e93' : '#8e8e93'}
-                />
-              </Pressable>
-            </View>
-
-            <ScrollView contentContainerStyle={{ paddingBottom: 16, gap: 14 }} showsVerticalScrollIndicator={false}>
-
-              {/* Line 1 */}
-              <View>
-                <Text style={[styles.formLabel, { color: isDark ? '#8e8e93' : '#8e8e93' }]}>Address Line 1</Text>
-                <TextInput
-                  style={[styles.formInput, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)', color: isDark ? '#ffffff' : '#000000' }]}
-                  placeholder="1234 Main St"
-                  placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
-                  value={dataAddress.line1}
-                  onChangeText={(text) => setDataAddress(prev => ({ ...prev, line1: text }))}
-                />
-                {addressError && <Text style={{ color: '#ff3b30', fontSize: 11, marginTop: 4, marginLeft: 4 }}>Address must be at least 5 characters</Text>}
-              </View>
-
-              {/* Line 2 */}
-              <View>
-                <Text style={[styles.formLabel, { color: isDark ? '#8e8e93' : '#8e8e93' }]}>Address Line 2</Text>
-                <TextInput
-                  style={[styles.formInput, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)', color: isDark ? '#ffffff' : '#000000' }]}
-                  placeholder="Apartment, suite, or floor (optional)"
-                  placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
-                  value={dataAddress.line2}
-                  onChangeText={(text) => setDataAddress(prev => ({ ...prev, line2: text }))}
-                />
-              </View>
-
-              {/* City */}
-              <View>
-                <Text style={[styles.formLabel, { color: isDark ? '#8e8e93' : '#8e8e93' }]}>City</Text>
-                <TextInput
-                  style={[styles.formInput, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)', color: isDark ? '#ffffff' : '#000000' }]}
-                  placeholder="Enter City"
-                  placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
-                  value={dataAddress.city}
-                  onChangeText={(text) => setDataAddress(prev => ({ ...prev, city: text }))}
-                />
-              </View>
-
-              {/* State */}
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.formLabel, { color: isDark ? '#8e8e93' : '#8e8e93' }]}>State</Text>
-                  <TextInput
-                    style={[styles.formInput, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)', color: isDark ? '#ffffff' : '#000000' }]}
-                    placeholder="State"
-                    placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
-                    value={dataAddress.state}
-                    onChangeText={(text) => setDataAddress(prev => ({ ...prev, state: text }))}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setAddressModalVisible(false)}>
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              style={[styles.modalCard, { backgroundColor: isDark ? '#1c1c1e' : '#ffffff', maxHeight: '90%', width: '100%' }]}
+            >
+              {/* Header */}
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, themeStyles.textTitle]}>
+                  {dataAddress.id ? 'Edit Address' : 'Add New Address'}
+                </Text>
+                <Pressable
+                  onPress={() => setAddressModalVisible(false)}
+                  hitSlop={15}
+                  style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)' }]}
+                >
+                  <SymbolView
+                    name={{ ios: 'xmark', android: 'close', web: 'close' }}
+                    size={14}
+                    tintColor={isDark ? '#8e8e93' : '#8e8e93'}
                   />
-                </View>
-                <View style={{ flex: 1.2 }}>
-                  <Text style={[styles.formLabel, { color: isDark ? '#8e8e93' : '#8e8e93' }]}>Zip Code</Text>
-                  <TextInput
-                    style={[styles.formInput, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)', color: isDark ? '#ffffff' : '#000000' }]}
-                    placeholder="Zip"
-                    placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
-                    value={dataAddress.zip}
-                    onChangeText={(text) => setDataAddress(prev => ({ ...prev, zip: text }))}
-                    keyboardType="numeric"
-                  />
-                </View>
+                </Pressable>
               </View>
 
-            </ScrollView>
+              <ScrollView contentContainerStyle={{ paddingBottom: 16, gap: 14 }} showsVerticalScrollIndicator={false}>
 
-            {/* Modal Actions */}
-            <View style={styles.modalActions}>
-              <Pressable
-                onPress={() => setAddressModalVisible(false)}
-                style={[styles.modalActionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#f2f2f7', flex: 1 }]}
-              >
-                <Text style={{ fontSize: 14, fontWeight: '700', color: isDark ? '#a1a1aa' : '#8e8e93' }}>Discard</Text>
-              </Pressable>
-              <Pressable
-                onPress={handleSaveAddress}
-                disabled={addressFormLoading}
-                style={[styles.modalActionBtn, { backgroundColor: isDark ? '#0A84FF' : '#007aff', flex: 1.5 }]}
-              >
-                {addressFormLoading ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
+                {/* Line 1 */}
+                <View>
+                  <View style={[styles.modernInputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]}>
+                    <SymbolView
+                      name={{ ios: 'mappin', android: 'location_on', web: 'location_on' }}
+                      size={15}
+                      tintColor={c.primary}
+                    />
+                    <TextInput
+                      style={[styles.modernInput, { color: isDark ? '#ffffff' : '#000000' }]}
+                      placeholder="Address Line 1"
+                      placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
+                      value={dataAddress.line1}
+                      onChangeText={(text) => setDataAddress(prev => ({ ...prev, line1: text }))}
+                    />
+                  </View>
+                  {addressError && <Text style={{ color: '#ff3b30', fontSize: 11, marginTop: 4, marginLeft: 4 }}>Address must be at least 5 characters</Text>}
+                </View>
+
+                {/* Line 2 */}
+                <View>
+                  <View style={[styles.modernInputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]}>
+                    <SymbolView
+                      name={{ ios: 'building.2.fill', android: 'business', web: 'business' }}
+                      size={15}
+                      tintColor={c.primary}
+                    />
+                    <TextInput
+                      style={[styles.modernInput, { color: isDark ? '#ffffff' : '#000000' }]}
+                      placeholder="Address Line 2 (optional)"
+                      placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
+                      value={dataAddress.line2}
+                      onChangeText={(text) => setDataAddress(prev => ({ ...prev, line2: text }))}
+                    />
+                  </View>
+                </View>
+
+                {/* City */}
+                <View>
+                  <View style={[styles.modernInputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]}>
+                    <SymbolView
+                      name={{ ios: 'building.fill', android: 'location_city', web: 'location_city' }}
+                      size={15}
+                      tintColor={c.primary}
+                    />
+                    <TextInput
+                      style={[styles.modernInput, { color: isDark ? '#ffffff' : '#000000' }]}
+                      placeholder="City"
+                      placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
+                      value={dataAddress.city}
+                      onChangeText={(text) => setDataAddress(prev => ({ ...prev, city: text }))}
+                    />
+                  </View>
+                </View>
+
+                {/* State */}
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <View style={[styles.modernInputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]}>
+                      <SymbolView
+                        name={{ ios: 'map.fill', android: 'map', web: 'map' }}
+                        size={15}
+                        tintColor={c.primary}
+                      />
+                      <TextInput
+                        style={[styles.modernInput, { color: isDark ? '#ffffff' : '#000000' }]}
+                        placeholder="State"
+                        placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
+                        value={dataAddress.state}
+                        onChangeText={(text) => setDataAddress(prev => ({ ...prev, state: text }))}
+                      />
+                    </View>
+                  </View>
+                  <View style={{ flex: 1.2 }}>
+                    <View style={[styles.modernInputWrapper, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]}>
+                      <SymbolView
+                        name={{ ios: 'number', android: 'pin', web: 'pin' }}
+                        size={15}
+                        tintColor={c.primary}
+                      />
+                      <TextInput
+                        style={[styles.modernInput, { color: isDark ? '#ffffff' : '#000000' }]}
+                        placeholder="Zip Code"
+                        placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
+                        value={dataAddress.zip}
+                        onChangeText={(text) => setDataAddress(prev => ({ ...prev, zip: text }))}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+                </View>
+
+              </ScrollView>
+
+              {/* Modal Actions */}
+              <View style={styles.modalActions}>
+                {dataAddress.id ? (
+                  <Pressable
+                    onPress={() => handleRemoveAddress(dataAddress.id)}
+                    disabled={removeAddressLoading !== null}
+                    style={[styles.modalActionBtn, { backgroundColor: isDark ? 'rgba(255, 59, 48, 0.12)' : 'rgba(255, 59, 48, 0.08)', flex: 1 }]}
+                  >
+                    {removeAddressLoading ? (
+                      <ActivityIndicator size="small" color="#ff3b30" />
+                    ) : (
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#ff3b30' }}>Delete</Text>
+                    )}
+                  </Pressable>
                 ) : (
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff' }}>Save</Text>
+                  <Pressable
+                    onPress={() => setAddressModalVisible(false)}
+                    style={[styles.modalActionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#f2f2f7', flex: 1 }]}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: isDark ? '#a1a1aa' : '#8e8e93' }}>Discard</Text>
+                  </Pressable>
                 )}
-              </Pressable>
-            </View>
+                <Pressable
+                  onPress={handleSaveAddress}
+                  disabled={addressFormLoading}
+                  style={[styles.modalActionBtn, { backgroundColor: isDark ? '#0A84FF' : '#007aff', flex: 1.5 }]}
+                >
+                  {addressFormLoading ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff' }}>Save</Text>
+                  )}
+                </Pressable>
+              </View>
 
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -746,6 +783,30 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  modernFormLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 6,
+    marginLeft: 2,
+  },
+  modernInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 48,
+    gap: 10,
+  },
+  modernInput: {
+    flex: 1,
+    height: '100%',
+    fontSize: 14,
+    fontWeight: '500',
+    paddingVertical: 0,
   },
 });
 
