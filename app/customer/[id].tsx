@@ -374,8 +374,7 @@ export default function CustomerDetailsScreen() {
             <View style={[styles.contactRow, { backgroundColor: c.inputBg }]}>
               <Pressable
                 onPress={() => Linking.openURL(`tel:${customer.phone}`)}
-                style={({ pressed }) => [styles.contactRowInfo, pressed && { opacity: 0.7 }]}
-                flex={1}
+                style={({ pressed }) => [styles.contactRowInfo, { flex: 1 }, pressed && { opacity: 0.7 }]}
               >
                 <SymbolView
                   name={{ ios: 'phone.fill', android: 'phone', web: 'phone' }}
@@ -405,8 +404,7 @@ export default function CustomerDetailsScreen() {
             <View style={[styles.contactRow, { backgroundColor: c.inputBg }]}>
               <Pressable
                 onPress={() => Linking.openURL(`mailto:${customer.email}`)}
-                style={({ pressed }) => [styles.contactRowInfo, pressed && { opacity: 0.7 }]}
-                flex={1}
+                style={({ pressed }) => [styles.contactRowInfo, { flex: 1 }, pressed && { opacity: 0.7 }]}
               >
                 <SymbolView
                   name={{ ios: 'envelope.fill', android: 'email', web: 'email' }}
@@ -480,8 +478,7 @@ export default function CustomerDetailsScreen() {
                     }) || '';
                     Linking.openURL(url);
                   }}
-                  style={({ pressed }) => [styles.contactRowInfo, pressed && { opacity: 0.7 }]}
-                  flex={1}
+                  style={({ pressed }) => [styles.contactRowInfo, { flex: 1 }, pressed && { opacity: 0.7 }]}
                 >
                   <SymbolView
                     name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}

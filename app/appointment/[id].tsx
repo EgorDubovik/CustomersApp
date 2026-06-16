@@ -1,44 +1,43 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { formatDate } from '@/components/scheduler/utils/TimeHelper';
+import { useColorScheme } from '@/components/useColorScheme';
+import { API_URL } from '@/constants/Config';
+import { useAuth } from '@/context/AuthContext';
+import { useSettings } from '@/context/SettingsContext';
+import { useToast } from '@/context/ToastContext';
+import * as Clipboard from 'expo-clipboard';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Stack, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Text,
-  View,
-  ScrollView,
-  Pressable,
   ActivityIndicator,
   Alert,
   Linking,
   Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack, useNavigation } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import * as Clipboard from 'expo-clipboard';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useAuth } from '@/context/AuthContext';
-import { useToast } from '@/context/ToastContext';
-import { API_URL } from '@/constants/Config';
-import { useColorScheme } from '@/components/useColorScheme';
-import { useSettings } from '@/context/SettingsContext';
-import { formatDate } from '@/components/scheduler/utils/TimeHelper';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 // Subcomponents and Assets
 import {
   AvatarInitials,
-  PulsingDot,
   PaymentProgressBar,
-  InfoRowIcon,
-  SwipeableNote,
+  PulsingDot,
+  SwipeableNote
 } from '@/components/appointment/AppointmentUI';
 import CopyModal from '@/components/appointment/CopyModal';
-import PaymentModal from '@/components/appointment/PaymentModal';
-import TimerHistoryModal from '@/components/appointment/TimerHistoryModal';
-import JobHistoryModal from '@/components/appointment/JobHistoryModal';
-import ServiceModal from '@/components/appointment/ServiceModal';
-import NotesChatModal from '@/components/appointment/NotesChatModal';
 import EditTimeModal from '@/components/appointment/EditTimeModal';
+import JobHistoryModal from '@/components/appointment/JobHistoryModal';
+import NotesChatModal from '@/components/appointment/NotesChatModal';
+import PaymentModal from '@/components/appointment/PaymentModal';
+import ServiceModal from '@/components/appointment/ServiceModal';
+import TimerHistoryModal from '@/components/appointment/TimerHistoryModal';
 
-import { styles, palette } from '@/components/appointment/styles';
-import { IAppointmentDetails, IService, IPayment, INote } from '@/components/appointment/types';
+import { palette, styles } from '@/components/appointment/styles';
+import { IAppointmentDetails, INote, IPayment, IService } from '@/components/appointment/types';
 
 export default function AppointmentDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -718,129 +717,149 @@ export default function AppointmentDetailsScreen() {
             </View>
 
             {/* Client Details (Phone, Email, Address) */}
-            {appointment.job.customer?.phone ? (
-              <View style={[styles.contactRow, { backgroundColor: c.inputBg }]}>
-                <View style={styles.contactRowInfo}>
-                  <SymbolView
-                    name={{ ios: 'phone.fill', android: 'phone', web: 'phone' }}
-                    size={14}
-                    tintColor={c.primary}
-                  />
-                  <Text style={[styles.contactRowText, { color: c.text }]} numberOfLines={1}>
-                    {appointment.job.customer.phone}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => {
-                    Clipboard.setStringAsync(appointment.job.customer!.phone);
-                    showToast({ message: 'Phone number copied to clipboard', type: 'success' });
-                  }}
-                  style={({ pressed }) => [styles.contactCopyBtn, pressed && { opacity: 0.6 }]}
-                  hitSlop={8}
-                >
-                  <SymbolView
-                    name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
-                    size={14}
-                    tintColor={c.primary}
-                  />
-                </Pressable>
-              </View>
-            ) : null}
+            {(() => {
+              const rows: React.ReactNode[] = [];
 
-            {appointment.job.customer ? (
-              appointment.job.customer.email ? (
-                <View style={[styles.contactRow, { backgroundColor: c.inputBg }]}>
-                  <View style={styles.contactRowInfo}>
-                    <SymbolView
-                      name={{ ios: 'envelope.fill', android: 'email', web: 'email' }}
-                      size={14}
-                      tintColor={c.primary}
-                    />
-                    <Text style={[styles.contactRowText, { color: c.text }]} numberOfLines={1}>
-                      {appointment.job.customer.email}
-                    </Text>
+              if (appointment.job.customer?.phone) {
+                rows.push(
+                  <View key="phone" style={[styles.contactRow, { backgroundColor: 'transparent', paddingHorizontal: 4, paddingVertical: 6, marginTop: 2 }]}>
+                    <View style={styles.contactRowInfo}>
+                      <SymbolView
+                        name={{ ios: 'phone.fill', android: 'phone', web: 'phone' }}
+                        size={14}
+                        tintColor={c.primary}
+                      />
+                      <Text style={[styles.contactRowText, { color: c.text }]} numberOfLines={1}>
+                        {appointment.job.customer.phone}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => {
+                        Clipboard.setStringAsync(appointment.job.customer!.phone);
+                        showToast({ message: 'Phone number copied to clipboard', type: 'success' });
+                      }}
+                      style={({ pressed }) => [styles.contactCopyBtn, pressed && { opacity: 0.6 }]}
+                      hitSlop={8}
+                    >
+                      <SymbolView
+                        name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
+                        size={14}
+                        tintColor={c.primary}
+                      />
+                    </Pressable>
                   </View>
-                  <Pressable
-                    onPress={() => {
-                      Clipboard.setStringAsync(appointment.job.customer!.email);
-                      showToast({ message: 'Email copied to clipboard', type: 'success' });
-                    }}
-                    style={({ pressed }) => [styles.contactCopyBtn, pressed && { opacity: 0.6 }]}
-                    hitSlop={8}
-                  >
-                    <SymbolView
-                      name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
-                      size={14}
-                      tintColor={c.primary}
-                    />
-                  </Pressable>
-                </View>
-              ) : (
-                <Pressable
-                  onPress={() => {
-                    router.push({
-                      pathname: '/customer/edit',
-                      params: {
-                        id: appointment.job.customer!.id,
-                        name: appointment.job.customer!.name,
-                        phone: appointment.job.customer!.phone || '',
-                        email: '',
-                      },
-                    });
-                  }}
-                  style={({ pressed }) => [
-                    styles.contactRow,
-                    { backgroundColor: c.inputBg },
-                    pressed && { opacity: 0.6 }
-                  ]}
-                >
-                  <View style={styles.contactRowInfo}>
-                    <SymbolView
-                      name={{ ios: 'envelope', android: 'email', web: 'email' }}
-                      size={14}
-                      tintColor={c.textMuted}
-                    />
-                    <Text style={[styles.contactRowText, { color: c.textMuted }]} numberOfLines={1}>
-                      Add customer email
-                    </Text>
-                  </View>
-                  <SymbolView
-                    name={{ ios: 'plus', android: 'add', web: 'add' }}
-                    size={14}
-                    tintColor={c.textMuted}
-                  />
-                </Pressable>
-              )
-            ) : null}
+                );
+              }
 
-            {clientAddress ? (
-              <View style={[styles.contactRow, { backgroundColor: c.inputBg }]}>
-                <View style={styles.contactRowInfo}>
-                  <SymbolView
-                    name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
-                    size={14}
-                    tintColor={c.primary}
-                  />
-                  <Text style={[styles.contactRowText, { color: c.text }]} numberOfLines={2}>
-                    {clientAddress}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => {
-                    Clipboard.setStringAsync(clientAddress);
-                    showToast({ message: 'Address copied to clipboard', type: 'success' });
-                  }}
-                  style={({ pressed }) => [styles.contactCopyBtn, pressed && { opacity: 0.6 }]}
-                  hitSlop={8}
-                >
-                  <SymbolView
-                    name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
-                    size={14}
-                    tintColor={c.primary}
-                  />
-                </Pressable>
-              </View>
-            ) : null}
+              if (appointment.job.customer) {
+                if (appointment.job.customer.email) {
+                  rows.push(
+                    <View key="email" style={[styles.contactRow, { backgroundColor: 'transparent', paddingHorizontal: 4, paddingVertical: 6, marginTop: 2 }]}>
+                      <View style={styles.contactRowInfo}>
+                        <SymbolView
+                          name={{ ios: 'envelope.fill', android: 'email', web: 'email' }}
+                          size={14}
+                          tintColor={c.primary}
+                        />
+                        <Text style={[styles.contactRowText, { color: c.text }]} numberOfLines={1}>
+                          {appointment.job.customer.email}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => {
+                          Clipboard.setStringAsync(appointment.job.customer!.email);
+                          showToast({ message: 'Email copied to clipboard', type: 'success' });
+                        }}
+                        style={({ pressed }) => [styles.contactCopyBtn, pressed && { opacity: 0.6 }]}
+                        hitSlop={8}
+                      >
+                        <SymbolView
+                          name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
+                          size={14}
+                          tintColor={c.primary}
+                        />
+                      </Pressable>
+                    </View>
+                  );
+                } else {
+                  rows.push(
+                    <Pressable
+                      key="add-email"
+                      onPress={() => {
+                        router.push({
+                          pathname: '/customer/edit',
+                          params: {
+                            id: appointment.job.customer!.id,
+                            name: appointment.job.customer!.name,
+                            phone: appointment.job.customer!.phone || '',
+                            email: '',
+                          },
+                        });
+                      }}
+                      style={({ pressed }) => [
+                        styles.contactRow,
+                        { backgroundColor: 'transparent', paddingHorizontal: 4, paddingVertical: 6, marginTop: 2 },
+                        pressed && { opacity: 0.6 }
+                      ]}
+                    >
+                      <View style={styles.contactRowInfo}>
+                        <SymbolView
+                          name={{ ios: 'envelope', android: 'email', web: 'email' }}
+                          size={14}
+                          tintColor={c.textMuted}
+                        />
+                        <Text style={[styles.contactRowText, { color: c.textMuted }]} numberOfLines={1}>
+                          Add customer email
+                        </Text>
+                      </View>
+                      <SymbolView
+                        name={{ ios: 'plus', android: 'add', web: 'add' }}
+                        size={14}
+                        tintColor={c.textMuted}
+                      />
+                    </Pressable>
+                  );
+                }
+              }
+
+              if (clientAddress) {
+                rows.push(
+                  <View key="address" style={[styles.contactRow, { backgroundColor: 'transparent', paddingHorizontal: 4, paddingVertical: 6, marginTop: 2 }]}>
+                    <View style={styles.contactRowInfo}>
+                      <SymbolView
+                        name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
+                        size={14}
+                        tintColor={c.primary}
+                      />
+                      <Text style={[styles.contactRowText, { color: c.text }]} numberOfLines={2}>
+                        {clientAddress}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => {
+                        Clipboard.setStringAsync(clientAddress);
+                        showToast({ message: 'Address copied to clipboard', type: 'success' });
+                      }}
+                      style={({ pressed }) => [styles.contactCopyBtn, pressed && { opacity: 0.6 }]}
+                      hitSlop={8}
+                    >
+                      <SymbolView
+                        name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
+                        size={14}
+                        tintColor={c.primary}
+                      />
+                    </Pressable>
+                  </View>
+                );
+              }
+
+              return rows.map((row, idx) => (
+                <React.Fragment key={idx}>
+                  {idx > 0 && <View style={[styles.divider, { backgroundColor: c.divider, marginVertical: 2 }]} />}
+                  {row}
+                </React.Fragment>
+              ));
+            })()}
           </View>
         </Animated.View>
 
@@ -1083,7 +1102,7 @@ export default function AppointmentDetailsScreen() {
       </ScrollView>
 
       {/* ═══ MODAL COMPONENTS ══════════════════════════════════════════════════ */}
-      
+
       {/* MODAL 1: Create Copy */}
       <CopyModal
         visible={copyModalVisible}
