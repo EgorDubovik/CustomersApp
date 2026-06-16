@@ -1,39 +1,40 @@
-import React, { useState } from 'react';
+import { API_URL } from '@/constants/Config';
+import { useAuth } from '@/context/AuthContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SymbolView } from 'expo-symbols';
+import { useState } from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
+  ActivityIndicator,
+  Dimensions,
   Image,
-  ImageBackground,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ActivityIndicator,
-  Dimensions,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SymbolView } from 'expo-symbols';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useAuth } from '@/context/AuthContext';
-import { API_URL } from '@/constants/Config';
-import { useColorScheme } from '@/components/useColorScheme';
 
 const { width, height: screenHeight } = Dimensions.get('screen');
 
+const headerBgSource = require('../assets/images/auth/login-header-bg.png');
+const resolvedBgAsset = Image.resolveAssetSource(headerBgSource);
+const bgAspectRatio = resolvedBgAsset ? resolvedBgAsset.height / resolvedBgAsset.width : 2.0;
+const scaledBgHeight = width * bgAspectRatio;
+
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const colorScheme = useColorScheme();
   const { login } = useAuth();
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [securePassword, setSecurePassword] = useState(true);
-
-  const isDark = colorScheme === 'dark';
+  const [rememberMe, setRememberMe] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -81,35 +82,16 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={[styles.container, { height: screenHeight }]}>
-      {/* Background Gradient */}
-      <Image
-        source={require('../assets/images/auth/bg-gradient.png')}
-        style={[StyleSheet.absoluteFill, { height: screenHeight }]}
-        resizeMode="stretch"
-      />
-
-      {/* Map Overlay */}
-      <Image
-        source={require('../assets/images/auth/map.png')}
-        style={[StyleSheet.absoluteFill, { height: screenHeight, opacity: isDark ? 0.15 : 0.4 }]}
-        resizeMode="stretch"
-      />
-
-      {/* Floating Objects - Premium Design */}
-      <Image
-        source={require('../assets/images/auth/coming-soon-object1.png')}
-        style={styles.floatingObj1}
-        resizeMode="contain"
-      />
-      <Image
-        source={require('../assets/images/auth/coming-soon-object2.png')}
-        style={styles.floatingObj2}
-        resizeMode="contain"
-      />
+    <View style={styles.container}>
+      {/* Background Floating Objects */}
       <Image
         source={require('../assets/images/auth/coming-soon-object3.png')}
-        style={styles.floatingObj3}
+        style={styles.bgObjectBottomRight}
+        resizeMode="contain"
+      />
+      <Image
+        source={require('../assets/images/auth/coming-soon-object1.png')}
+        style={styles.bgObjectMiddleLeft}
         resizeMode="contain"
       />
 
@@ -118,134 +100,137 @@ export default function LoginScreen() {
         style={styles.keyboardAvoidingView}
       >
         <ScrollView
-          contentContainerStyle={[
-            styles.scrollContainer,
-            { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 40 },
-          ]}
+          contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Glassmorphic Login Card */}
-          <View
-            style={[
-              styles.card,
-              isDark ? styles.cardDark : styles.cardLight,
-              { shadowColor: isDark ? '#000' : '#4361ee' },
-            ]}
-          >
-            <View style={styles.header}>
-              <Text style={styles.title}>SIGN IN</Text>
-              <Text style={styles.subtitle}>Enter your email and password to login</Text>
+          {/* Header Section with 3D Ribbons Background */}
+          <View style={styles.headerSection}>
+            <Image
+              source={headerBgSource}
+              style={styles.headerBg}
+              resizeMode="cover"
+            />
+            <LinearGradient
+              colors={['transparent', '#030712']}
+              style={styles.headerGradient}
+            />
+            <View style={[styles.headerTextContainer, { paddingTop: insets.top + 65 }]}>
+              <Text style={styles.title}>LOGIN TO</Text>
+              <Text style={styles.title}>YOUR ACCOUNT</Text>
             </View>
+          </View>
+
+          {/* Form Content */}
+          <View style={styles.formContainer}>
+            <Text style={styles.subtitle}>Enter your login information</Text>
 
             {/* Error Message */}
             {!!errorMessage && (
-              <View style={[styles.errorContainer, isDark ? styles.errorDark : styles.errorLight]}>
+              <View style={styles.errorContainer}>
                 <Text style={styles.errorText}>{errorMessage}</Text>
               </View>
             )}
 
-            {/* Form Fields */}
-            <View style={styles.form}>
-              {/* Email Field */}
-              <View style={styles.inputWrapper}>
-                <Text style={[styles.label, isDark ? styles.textDark : styles.textLight]}>Email</Text>
-                <View
-                  style={[
-                    styles.inputContainer,
-                    isDark ? styles.inputContainerDark : styles.inputContainerLight,
-                  ]}
-                >
-                  <SymbolView
-                    name={{ ios: 'envelope.fill', android: 'mail', web: 'mail' }}
-                    size={20}
-                    tintColor="#888ea8"
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={[styles.input, isDark ? styles.inputDarkText : styles.inputLightText]}
-                    placeholder="Enter Email"
-                    placeholderTextColor="#888ea8"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                </View>
-              </View>
+            {/* Email Input */}
+            <View style={styles.inputContainer}>
+              <SymbolView
+                name={{ ios: 'envelope.fill', android: 'mail', web: 'mail' }}
+                size={20}
+                tintColor="#64748b"
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor="#475569"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
 
-              {/* Password Field */}
-              <View style={styles.inputWrapper}>
-                <Text style={[styles.label, isDark ? styles.textDark : styles.textLight]}>Password</Text>
-                <View
-                  style={[
-                    styles.inputContainer,
-                    isDark ? styles.inputContainerDark : styles.inputContainerLight,
-                  ]}
-                >
-                  <SymbolView
-                    name={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
-                    size={20}
-                    tintColor="#888ea8"
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={[styles.input, isDark ? styles.inputDarkText : styles.inputLightText]}
-                    placeholder="Enter Password"
-                    placeholderTextColor="#888ea8"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={securePassword}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setSecurePassword(!securePassword)}
-                    style={styles.eyeIcon}
-                  >
-                    <SymbolView
-                      name={
-                        securePassword
-                          ? { ios: 'eye.slash.fill', android: 'visibility_off', web: 'visibility_off' }
-                          : { ios: 'eye.fill', android: 'visibility', web: 'visibility' }
-                      }
-                      size={20}
-                      tintColor="#888ea8"
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Sign In Button */}
+            {/* Password Input */}
+            <View style={styles.inputContainer}>
+              <SymbolView
+                name={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
+                size={20}
+                tintColor="#64748b"
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor="#475569"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={securePassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
               <TouchableOpacity
-                style={styles.buttonWrapper}
-                onPress={handleLogin}
-                disabled={loading}
+                onPress={() => setSecurePassword(!securePassword)}
+                style={styles.eyeIcon}
+                activeOpacity={0.7}
+              >
+                <SymbolView
+                  name={
+                    securePassword
+                      ? { ios: 'eye.slash.fill', android: 'visibility_off', web: 'visibility_off' }
+                      : { ios: 'eye.fill', android: 'visibility', web: 'visibility' }
+                  }
+                  size={20}
+                  tintColor="#64748b"
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Remember Me & Forgot Password */}
+            <View style={styles.optionsRow}>
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={() => setRememberMe(!rememberMe)}
                 activeOpacity={0.8}
               >
-                <LinearGradient
-                  colors={['#4361ee', '#805dca']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.button}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
-                  ) : (
-                    <Text style={styles.buttonText}>SIGN IN</Text>
+                <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
+                  {rememberMe && (
+                    <SymbolView
+                      name={{ ios: 'checkmark', android: 'check', web: 'check' }}
+                      size={12}
+                      tintColor="#ffffff"
+                    />
                   )}
-                </LinearGradient>
+                </View>
+                <Text style={styles.checkboxLabel}>Remember me</Text>
               </TouchableOpacity>
 
-              <View style={styles.footer}>
-                <Text style={[styles.footerText, isDark ? styles.textDark : styles.textLight]}>
-                  Don't have an account ?{' '}
-                </Text>
-                <TouchableOpacity>
-                  <Text style={styles.signUpLink}>SIGN UP</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity activeOpacity={0.7}>
+                <Text style={styles.forgotPasswordText}>Forgot password</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Login Button */}
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Text style={styles.loginButtonText}>LOGIN</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Footer Sign Up */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Don't have an account? </Text>
+              <TouchableOpacity activeOpacity={0.7}>
+                <Text style={styles.signUpLink}>Sign Up</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
@@ -257,190 +242,182 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#060818',
+    backgroundColor: '#030712', // deep slate/black
+  },
+  bgObjectBottomRight: {
+    position: 'absolute',
+    bottom: -40,
+    right: -40,
+    width: 260,
+    height: 260,
+    opacity: 0.35, // subtle glow behind the form
+  },
+  bgObjectMiddleLeft: {
+    position: 'absolute',
+    top: '35%',
+    left: -50,
+    width: 200,
+    height: 200,
+    opacity: 0.25, // subtle glow
   },
   keyboardAvoidingView: {
     flex: 1,
   },
   scrollContainer: {
     flexGrow: 1,
+    backgroundColor: 'transparent', // transparent to let background objects show through
+    paddingBottom: 40,
+  },
+  headerSection: {
+    height: 380, // Taller header section to push ribbons down naturally
+    width: '100%',
+    position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
   },
-  // Floating design items matching web layout
-  floatingObj1: {
+  headerBg: {
     position: 'absolute',
-    left: -50,
-    top: '30%',
-    width: 150,
-    height: 300,
-    opacity: 0.7,
+    left: 0,
+    top: 0,
+    width: width,
+    height: scaledBgHeight,
   },
-  floatingObj2: {
+  headerGradient: {
     position: 'absolute',
-    left: '10%',
-    top: -30,
-    width: 120,
-    height: 120,
-    opacity: 0.5,
+    left: 0,
+    right: 0,
+    top: Math.max(380, scaledBgHeight - 150), // Position gradient at bottom of container or bottom of image, whichever is larger
+    height: 150,
   },
-  floatingObj3: {
-    position: 'absolute',
-    right: -20,
-    top: -20,
-    width: 200,
-    height: 200,
-    opacity: 0.6,
-  },
-  // Card styles
-  card: {
-    width: '100%',
-    maxWidth: 440,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 24,
-    // Shadow for iOS/Android
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 8,
-  },
-  cardLight: {
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    borderColor: 'rgba(255, 255, 255, 0.5)',
-  },
-  cardDark: {
-    backgroundColor: 'rgba(14, 23, 38, 0.75)',
-    borderColor: 'rgba(14, 23, 38, 0.4)',
-  },
-  header: {
-    marginBottom: 24,
-    alignItems: 'flex-start',
+  headerTextContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#4361ee',
-    letterSpacing: 1,
+    fontSize: 32,
+    fontWeight: '600', // Made less bold/fat as requested
+    color: '#ffffff',
+    letterSpacing: 1.5,
+    textAlign: 'center',
+    lineHeight: 38,
+  },
+  formContainer: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 10,
   },
   subtitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#888ea8',
-    marginTop: 6,
+    fontSize: 16,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginBottom: 28,
+    fontWeight: '500',
   },
-  // Error Box
   errorContainer: {
-    padding: 12,
-    borderRadius: 6,
-    marginBottom: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: 'rgba(239, 68, 68, 0.2)',
     borderWidth: 1,
-    width: '100%',
-  },
-  errorLight: {
-    backgroundColor: '#fff5f5',
-    borderColor: 'rgba(231, 81, 90, 0.25)',
-  },
-  errorDark: {
-    backgroundColor: 'rgba(231, 81, 90, 0.15)',
-    borderColor: 'rgba(231, 81, 90, 0.3)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
   },
   errorText: {
-    color: '#e7515a',
+    color: '#ef4444',
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
   },
-  form: {
-    width: '100%',
-  },
-  inputWrapper: {
-    marginBottom: 20,
-    width: '100%',
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  textLight: {
-    color: '#3b3f5c',
-  },
-  textDark: {
-    color: '#e0e6ed',
-  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
     borderWidth: 1,
-    height: 48,
-    paddingHorizontal: 12,
-    position: 'relative',
-  },
-  inputContainerLight: {
-    backgroundColor: '#ffffff',
-    borderColor: '#e0e6ed',
-  },
-  inputContainerDark: {
-    backgroundColor: '#1b2e4b',
-    borderColor: '#253b5c',
+    borderColor: '#1e293b',
+    borderRadius: 12,
+    height: 56,
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
   inputIcon: {
-    marginRight: 10,
+    marginRight: 12,
   },
   input: {
     flex: 1,
     height: '100%',
-    fontSize: 15,
-  },
-  inputLightText: {
-    color: '#0e1726',
-  },
-  inputDarkText: {
-    color: '#f1f2f3',
+    color: '#f8fafc',
+    fontSize: 16,
   },
   eyeIcon: {
     padding: 6,
   },
-  // Button
-  buttonWrapper: {
-    marginTop: 10,
-    width: '100%',
-    borderRadius: 6,
-    overflow: 'hidden',
-    shadowColor: '#4361ee',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4,
+  optionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 28,
   },
-  button: {
-    height: 48,
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 1.5,
+    borderColor: '#475569',
+    borderRadius: 5,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 6,
+    marginRight: 8,
+    backgroundColor: 'transparent',
   },
-  buttonText: {
+  checkboxActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  checkboxLabel: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  forgotPasswordText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  loginButton: {
+    backgroundColor: '#2563eb',
+    height: 56,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+    marginBottom: 28,
+  },
+  loginButtonText: {
     color: '#ffffff',
     fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 1,
+    fontWeight: '700',
+    letterSpacing: 1.5,
   },
-  // Footer
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24,
+    alignItems: 'center',
+    marginTop: 10,
   },
   footerText: {
+    color: '#64748b',
     fontSize: 14,
   },
   signUpLink: {
-    color: '#4361ee',
+    color: '#2563eb',
     fontSize: 14,
-    fontWeight: '700',
-    textDecorationLine: 'underline',
+    fontWeight: '600',
   },
 });
