@@ -1,5 +1,6 @@
 import { API_URL } from '@/constants/Config';
 import { useAuth } from '@/context/AuthContext';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
@@ -122,7 +123,11 @@ export default function LoginScreen() {
           </View>
 
           {/* Form Content */}
-          <View style={styles.formContainer}>
+          <BlurView
+            intensity={35}
+            tint="dark"
+            style={styles.formContainer}
+          >
             <Text style={styles.subtitle}>Enter your login information</Text>
 
             {/* Error Message */}
@@ -232,7 +237,7 @@ export default function LoginScreen() {
                 <Text style={styles.signUpLink}>Sign Up</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </BlurView>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -304,7 +309,15 @@ const styles = StyleSheet.create({
   formContainer: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 10,
+    paddingTop: 30,
+    paddingBottom: 40,
+    width: '100%',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(3, 7, 18, 0.45)', // dark glass backplate
   },
   subtitle: {
     fontSize: 16,
