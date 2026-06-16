@@ -116,7 +116,7 @@ export default function LoginScreen() {
               colors={['transparent', '#030712']}
               style={styles.headerGradient}
             />
-            <View style={[styles.headerTextContainer, { paddingTop: insets.top + 65 }]}>
+            <View style={[styles.headerTextContainer, { paddingTop: insets.top + 45 }]}>
               <Text style={styles.title}>LOGIN TO</Text>
               <Text style={styles.title}>YOUR ACCOUNT</Text>
             </View>
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   headerSection: {
-    height: 380, // Taller header section to push ribbons down naturally
+    height: 300, // Reduced to shift the blur container up by 80px (about 20%)
     width: '100%',
     position: 'relative',
     justifyContent: 'center',
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    top: Math.max(380, scaledBgHeight - 150), // Position gradient at bottom of container or bottom of image, whichever is larger
+    top: Math.max(300, scaledBgHeight - 150), // Position gradient at bottom of container or bottom of image, whichever is larger
     height: 150,
   },
   headerTextContainer: {
