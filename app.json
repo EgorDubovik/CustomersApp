@@ -35,7 +35,14 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow ApexFlow to access your photos to attach job pictures.",
+          "cameraPermission": "Allow ApexFlow to use the camera to take job pictures."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

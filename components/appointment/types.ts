@@ -40,6 +40,58 @@ export interface INote {
   };
 }
 
+export interface IImage {
+  id: number;
+  path: string;
+  owner_id?: number;
+  created_at?: string;
+}
+
+export interface IExpense {
+  id: number;
+  title: string;
+  amount: number | string;
+  created_at?: string;
+}
+
+export interface IInvoice {
+  id: number;
+  status: number; // 0 draft, 1 sent, 2 cancelled, 3 failed
+  status_text?: string;
+  balance_status: number; // 0 unpaid, 1 partially paid, 2 paid
+  balance_status_text?: string;
+  email?: string;
+  recipients?: string[] | null;
+  recipient_emails?: string[];
+  pdf_path?: string;
+  pdf_url?: string;
+  is_delivered?: boolean;
+  sent_at?: string;
+  created_at?: string;
+}
+
+export interface IStickyNote {
+  id: number;
+  job_id: number;
+  text: string;
+  date: string;
+  status: number; // 0 new, 1 completed
+  employee_id: number;
+  creator_id: number;
+  employee?: { id: number; name: string; color: string };
+  created_at?: string;
+}
+
+export interface IEmployee {
+  id: number;
+  name: string;
+  color: string;
+  active?: number;
+  roles_ids?: number[];
+}
+
+export type AppointmentTabKey = 'work' | 'photos' | 'notes' | 'info';
+
 export interface IAppointmentDetails {
   id: number;
   status: number;
@@ -53,6 +105,9 @@ export interface IAppointmentDetails {
     remainingBalance: number;
     services: IService[];
     payments: IPayment[];
+    images?: IImage[];
+    expenses?: IExpense[];
+    invoices?: IInvoice[];
     address?: { full: string };
     customer?: { id: number; name: string; email: string; phone: string; jobsCount: number; addresses?: { full: string }[] };
     appointments?: { id: number; status: number; start: string; end: string; techs?: { id: number; name: string; color: string }[] }[];

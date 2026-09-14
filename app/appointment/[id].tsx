@@ -22,12 +22,12 @@ import {
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 // Subcomponents and Assets
-import {
-  AvatarInitials,
-  PaymentProgressBar,
-  PulsingDot,
-  SwipeableNote
-} from '@/components/appointment/AppointmentUI';
+import { PulsingDot } from '@/components/appointment/AppointmentUI';
+import AppointmentTabBar, { TabDef } from '@/components/appointment/tabs/AppointmentTabBar';
+import InfoTab from '@/components/appointment/tabs/InfoTab';
+import NotesTab from '@/components/appointment/tabs/NotesTab';
+import PhotosTab from '@/components/appointment/tabs/PhotosTab';
+import WorkTab from '@/components/appointment/tabs/WorkTab';
 import CopyModal from '@/components/appointment/CopyModal';
 import EditTimeModal from '@/components/appointment/EditTimeModal';
 import JobHistoryModal from '@/components/appointment/JobHistoryModal';
@@ -37,7 +37,7 @@ import ServiceModal from '@/components/appointment/ServiceModal';
 import TimerHistoryModal from '@/components/appointment/TimerHistoryModal';
 
 import { palette, styles } from '@/components/appointment/styles';
-import { IAppointmentDetails, INote, IPayment, IService } from '@/components/appointment/types';
+import { AppointmentTabKey, IAppointmentDetails, IService } from '@/components/appointment/types';
 
 export default function AppointmentDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -79,6 +79,17 @@ export default function AppointmentDetailsScreen() {
   const [loadingRemoveNote, setLoadingRemoveNote] = useState<number>(0);
   const [focusNotesInput, setFocusNotesInput] = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
+
+  // Tabs — content is mounted on first visit and kept alive so in-progress
+  // input (expense form, tech selection) survives switching tabs
+  const [activeTab, setActiveTab] = useState<AppointmentTabKey>('work');
+  const [visitedTabs, setVisitedTabs] = useState<AppointmentTabKey[]>(['work']);
+  const [openStickyCount, setOpenStickyCount] = useState<number | null>(null);
+
+  const switchTab = (key: AppointmentTabKey) => {
+    setActiveTab(key);
+    setVisitedTabs((prev) => (prev.includes(key) ? prev : [...prev, key]));
+  };
 
   // Fetch Appointment Details
   const fetchDetails = async (silent = false) => {
@@ -246,11 +257,6 @@ export default function AppointmentDetailsScreen() {
   };
 
   // Note Handlers
-  const canDeleteNote = (note: INote) => {
-    if (!user) return false;
-    return user.id === note.creator?.id;
-  };
-
   const handleRemoveNote = (noteId: number) => {
     if (!token) return;
 
@@ -378,13 +384,18 @@ export default function AppointmentDetailsScreen() {
   ];
   const currentStatus = statusConfig[appointment.status] || statusConfig[0];
   const customerName = appointment.job.customer?.name || 'Unknown Client';
-  const clientAddress = appointment.job.customer?.addresses?.[0]?.full || appointment.job.address?.full || '';
 
-  const services = appointment.job.services || [];
-  const subtotal = services.reduce((sum, s) => sum + parseFloat(s.price || '0'), 0);
-  const taxableSubtotal = services.reduce((sum, s) => sum + (s.taxable ? parseFloat(s.price || '0') : 0), 0);
-  const taxAmount = Math.max(0, appointment.job.totalAmount - subtotal);
-  const taxRatePct = taxableSubtotal > 0 ? (taxAmount / taxableSubtotal) * 100 : 0;
+  const tabs: TabDef[] = [
+    { key: 'work', label: 'Work', icon: { ios: 'wrench.and.screwdriver.fill', android: 'build', web: 'build' } },
+    { key: 'photos', label: 'Photos', icon: { ios: 'photo.fill', android: 'photo', web: 'photo' }, badge: appointment.job.images?.length },
+    {
+      key: 'notes',
+      label: 'Notes',
+      icon: { ios: 'note.text', android: 'note', web: 'note' },
+      badge: (appointment.job.notes?.length || 0) + (openStickyCount || 0),
+    },
+    { key: 'info', label: 'Info', icon: { ios: 'info.circle.fill', android: 'info', web: 'info' } },
+  ];
 
   const formatTime = (totalSeconds: number) => {
     const h = Math.floor(totalSeconds / 3600);
@@ -396,713 +407,315 @@ export default function AppointmentDetailsScreen() {
   // ─── RENDER ─────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1 }}>
+      <Stack.Screen options={{ headerShown: false }} />
       <ScrollView
         scrollEnabled={scrollEnabled}
         style={{ flex: 1, backgroundColor: c.bg }}
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={[1]}
       >
-        <Stack.Screen options={{ headerShown: false }} />
-
-        {/* ═══ HERO SECTION ═══════════════════════════════════════════════════════ */}
-        <Animated.View entering={FadeInDown.duration(500)}>
-          <LinearGradient
-            colors={currentStatus.gradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroSection}
-          >
-            {/* Back button */}
-            <Pressable
-              onPress={() => router.back()}
-              style={({ pressed }) => [styles.heroBackBtn, pressed && { opacity: 0.7 }]}
-              hitSlop={12}
+        {/* Child 0: hero + actions + timer. Child 1: sticky tab bar. Child 2: tab content. */}
+        <View>
+          {/* ═══ HERO SECTION ═══════════════════════════════════════════════════════ */}
+          <Animated.View entering={FadeInDown.duration(500)}>
+            <LinearGradient
+              colors={currentStatus.gradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroSection}
             >
-              <SymbolView
-                name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                size={18}
-                tintColor="#ffffff"
-              />
-            </Pressable>
-
-            {/* Customer Name */}
-            <Text style={styles.heroCustomerName}>{customerName}</Text>
-
-            {/* Address — tap opens maps, copy button copies to clipboard */}
-            {appointment.job.address?.full && (
+              {/* Back button */}
               <Pressable
-                onPress={() => {
-                  const address = encodeURIComponent(appointment.job.address!.full);
-                  let url = '';
-                  if (navigationMap === 'google') {
-                    url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
-                  } else {
-                    url = Platform.select({
-                      ios: `maps://app?daddr=${address}`,
-                      android: `google.navigation:q=${address}`,
-                      default: `https://www.google.com/maps/dir/?api=1&destination=${address}`,
-                    }) || '';
-                  }
-                  Linking.openURL(url);
-                }}
-                style={({ pressed }) => [styles.heroAddressRow, pressed && { opacity: 0.75 }]}
-              >
-                <View style={styles.heroAddressIconWrap}>
-                  <SymbolView
-                    name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
-                    size={16}
-                    tintColor="#ffffff"
-                  />
-                </View>
-                <Text style={styles.heroAddressText} numberOfLines={2}>
-                  {appointment.job.address.full}
-                </Text>
-                <Pressable
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    Clipboard.setStringAsync(appointment.job.address!.full);
-                    showToast({ message: 'Address copied to clipboard', type: 'success' });
-                  }}
-                  style={({ pressed }) => [styles.heroCopyBtn, pressed && { backgroundColor: 'rgba(255,255,255,0.35)' }]}
-                  hitSlop={6}
-                >
-                  <SymbolView
-                    name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
-                    size={14}
-                    tintColor="#ffffff"
-                  />
-                </Pressable>
-              </Pressable>
-            )}
-
-            {/* Date & Time */}
-            <View style={styles.heroTimeRow}>
-              <Pressable
-                onPress={() => setJobHistoryModalVisible(true)}
-                style={({ pressed }) => [styles.heroTimePill, pressed && { opacity: 0.75 }]}
+                onPress={() => router.back()}
+                style={({ pressed }) => [styles.heroBackBtn, pressed && { opacity: 0.7 }]}
+                hitSlop={12}
               >
                 <SymbolView
-                  name={{ ios: 'calendar', android: 'calendar_today', web: 'calendar_today' }}
-                  size={12}
-                  tintColor="rgba(255,255,255,0.9)"
-                />
-                <Text style={styles.heroTimeText}>
-                  {formatDate(appointment.start, 'MMM DD, YYYY')}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setJobHistoryModalVisible(true)}
-                style={({ pressed }) => [styles.heroTimePill, pressed && { opacity: 0.75 }]}
-              >
-                <SymbolView
-                  name={{ ios: 'clock', android: 'schedule', web: 'schedule' }}
-                  size={12}
-                  tintColor="rgba(255,255,255,0.9)"
-                />
-                <Text style={styles.heroTimeText}>
-                  {formatDate(appointment.start, 'hh:mm A')} — {formatDate(appointment.end, 'hh:mm A')}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={handleOpenEditTimeModal}
-                style={({ pressed }) => [
-                  styles.heroTimePill,
-                  { backgroundColor: 'rgba(255,255,255,0.3)' },
-                  pressed && { opacity: 0.75 },
-                ]}
-              >
-                <SymbolView
-                  name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
-                  size={12}
+                  name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+                  size={18}
                   tintColor="#ffffff"
                 />
-                <Text style={styles.heroTimeText}>Edit</Text>
               </Pressable>
-            </View>
-          </LinearGradient>
-        </Animated.View>
 
-        {/* ═══ ACTION BUTTONS ═══════════════════════════════════════════════════ */}
-        <Animated.View entering={FadeInDown.duration(500).delay(100)} style={styles.actionRow}>
-          {/* Status Action Button */}
-          <Pressable
-            onPress={handleStatusPress}
-            disabled={statusLoading}
-            style={({ pressed }) => [
-              styles.actionBtn,
-              {
-                backgroundColor: appointment.status === 2 ? c.inputBg : c.primaryMuted,
-                borderColor: appointment.status === 2 ? c.divider : c.primary,
-              },
-              pressed && { transform: [{ scale: 0.96 }] },
-            ]}
-          >
-            {statusLoading ? (
-              <ActivityIndicator size="small" color={appointment.status === 2 ? c.textMuted : c.primary} />
-            ) : (
-              <>
-                <SymbolView name={currentStatus.icon} size={16} tintColor={appointment.status === 2 ? c.textMuted : c.primary} />
-                <Text style={[styles.actionBtnText, { color: appointment.status === 2 ? c.textMuted : c.primary }]}>
-                  {currentStatus.action}
-                </Text>
-              </>
-            )}
-          </Pressable>
+              {/* Customer Name */}
+              <Text style={styles.heroCustomerName}>{customerName}</Text>
 
-          {/* Timer Button (only when active) */}
-          {appointment.status === 1 && companySettings?.timerEnabled === 'true' && (
-            <Pressable
-              onPress={handleToggleTimer}
-              disabled={timerLoading}
-              style={({ pressed }) => [
-                styles.actionBtnCircle,
-                {
-                  backgroundColor: isTimerRunning ? c.dangerMuted : c.successMuted,
-                  borderColor: isTimerRunning ? c.danger : c.success,
-                },
-                pressed && { transform: [{ scale: 0.92 }] },
-              ]}
-            >
-              {timerLoading ? (
-                <ActivityIndicator size="small" color={isTimerRunning ? c.danger : c.success} />
-              ) : (
-                <SymbolView
-                  name={isTimerRunning ? { ios: 'pause.fill', android: 'pause', web: 'pause' } : { ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }}
-                  size={18}
-                  tintColor={isTimerRunning ? c.danger : c.success}
-                />
-              )}
-            </Pressable>
-          )}
-
-          {/* Copy Button */}
-          <Pressable
-            onPress={() => setCopyModalVisible(true)}
-            style={({ pressed }) => [
-              styles.actionBtn,
-              { backgroundColor: c.card, borderColor: c.cardBorder },
-              pressed && { transform: [{ scale: 0.96 }] },
-            ]}
-          >
-            <SymbolView
-              name={{ ios: 'doc.on.doc.fill', android: 'content_copy', web: 'content_copy' }}
-              size={14}
-              tintColor={c.primary}
-            />
-            <Text style={[styles.actionBtnText, { color: c.primary }]}>Copy</Text>
-          </Pressable>
-
-          {/* Pay Button */}
-          <Pressable
-            onPress={() => setPayModalVisible(true)}
-            style={({ pressed }) => [
-              styles.actionBtn,
-              { backgroundColor: c.success, borderColor: c.success },
-              pressed && { transform: [{ scale: 0.96 }] },
-            ]}
-          >
-            <SymbolView
-              name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
-              size={14}
-              tintColor="#ffffff"
-            />
-            <Text style={[styles.actionBtnText, { color: '#ffffff' }]}>Pay</Text>
-          </Pressable>
-        </Animated.View>
-
-        {/* ═══ TIMER BANNER ══════════════════════════════════════════════════════ */}
-        {companySettings?.timerEnabled === 'true' && (
-          <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ paddingHorizontal: 16 }}>
-            <Pressable
-              onPress={() => setHistoryModalVisible(true)}
-              style={({ pressed }) => [
-                styles.timerBanner,
-                {
-                  backgroundColor: c.card,
-                  borderColor: isTimerRunning ? c.success : c.cardBorder,
-                  borderWidth: isTimerRunning ? 1.5 : 1,
-                },
-                pressed && { opacity: 0.9 },
-              ]}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                {isTimerRunning ? (
-                  <PulsingDot color={c.success} />
-                ) : (
-                  <SymbolView
-                    name={{ ios: 'clock.fill', android: 'schedule', web: 'schedule' }}
-                    size={18}
-                    tintColor={c.textMuted}
-                  />
-                )}
-                <Text style={[
-                  styles.timerText,
-                  { color: isTimerRunning ? c.success : c.textMuted, fontVariant: ['tabular-nums'] },
-                ]}>
-                  {formatTime(elapsedSeconds)}
-                </Text>
-              </View>
-              <View style={[styles.timerHistoryBtn, { backgroundColor: c.primaryMuted }]}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: c.primary }}>History</Text>
-                <SymbolView
-                  name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                  size={10}
-                  tintColor={c.primary}
-                />
-              </View>
-            </Pressable>
-          </Animated.View>
-        )}
-
-        {/* ═══ CLIENT DETAILS CARD ═══════════════════════════════════════════════ */}
-        <Animated.View entering={FadeInDown.duration(500).delay(400)} style={{ paddingHorizontal: 16, marginTop: 12 }}>
-          <View style={[styles.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
-            {/* Client profile row */}
-            <View style={styles.clientProfileRow}>
-              {appointment.job.customer ? (
-                <Pressable
-                  onPress={() => router.push(`/customer/${appointment.job.customer!.id}` as any)}
-                  style={({ pressed }) => [
-                    { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
-                    pressed && { opacity: 0.75 }
-                  ]}
-                >
-                  <AvatarInitials name={customerName} size={48} />
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: c.text }} numberOfLines={1}>
-                      {customerName}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <View style={[styles.miniChip, { backgroundColor: c.primaryMuted }]}>
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: c.primary }}>
-                          {appointment.job.customer?.jobsCount ?? 0} jobs
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                </Pressable>
-              ) : (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 }}>
-                  <AvatarInitials name={customerName} size={48} />
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: c.text }} numberOfLines={1}>
-                      {customerName}
-                    </Text>
-                  </View>
-                </View>
-              )}
-              {appointment.job.customer && (
+              {/* Address — tap opens maps, copy button copies to clipboard */}
+              {appointment.job.address?.full && (
                 <Pressable
                   onPress={() => {
-                    router.push({
-                      pathname: '/customer/edit',
-                      params: {
-                        id: appointment.job.customer!.id,
-                        name: appointment.job.customer!.name,
-                        phone: appointment.job.customer!.phone || '',
-                        email: appointment.job.customer!.email || '',
-                      },
-                    });
+                    const address = encodeURIComponent(appointment.job.address!.full);
+                    let url = '';
+                    if (navigationMap === 'google') {
+                      url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
+                    } else {
+                      url = Platform.select({
+                        ios: `maps://app?daddr=${address}`,
+                        android: `google.navigation:q=${address}`,
+                        default: `https://www.google.com/maps/dir/?api=1&destination=${address}`,
+                      }) || '';
+                    }
+                    Linking.openURL(url);
                   }}
-                  style={({ pressed }) => [styles.clientEditBtn, pressed && { opacity: 0.6 }]}
-                  hitSlop={8}
+                  style={({ pressed }) => [styles.heroAddressRow, pressed && { opacity: 0.75 }]}
                 >
-                  <SymbolView
-                    name={{ ios: 'square.and.pencil', android: 'edit', web: 'edit' }}
-                    size={18}
-                    tintColor={c.primary}
-                  />
+                  <View style={styles.heroAddressIconWrap}>
+                    <SymbolView
+                      name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
+                      size={16}
+                      tintColor="#ffffff"
+                    />
+                  </View>
+                  <Text style={styles.heroAddressText} numberOfLines={2}>
+                    {appointment.job.address.full}
+                  </Text>
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      Clipboard.setStringAsync(appointment.job.address!.full);
+                      showToast({ message: 'Address copied to clipboard', type: 'success' });
+                    }}
+                    style={({ pressed }) => [styles.heroCopyBtn, pressed && { backgroundColor: 'rgba(255,255,255,0.35)' }]}
+                    hitSlop={6}
+                  >
+                    <SymbolView
+                      name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
+                      size={14}
+                      tintColor="#ffffff"
+                    />
+                  </Pressable>
                 </Pressable>
               )}
-            </View>
 
-            {/* Client Details (Phone, Email, Address) */}
-            {(() => {
-              const rows: React.ReactNode[] = [];
-
-              if (appointment.job.customer?.phone) {
-                rows.push(
-                  <View key="phone" style={[styles.contactRow, { backgroundColor: 'transparent', paddingHorizontal: 4, paddingVertical: 6, marginTop: 2 }]}>
-                    <View style={styles.contactRowInfo}>
-                      <SymbolView
-                        name={{ ios: 'phone.fill', android: 'phone', web: 'phone' }}
-                        size={14}
-                        tintColor={c.primary}
-                      />
-                      <Text style={[styles.contactRowText, { color: c.text }]} numberOfLines={1}>
-                        {appointment.job.customer.phone}
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={() => {
-                        Clipboard.setStringAsync(appointment.job.customer!.phone);
-                        showToast({ message: 'Phone number copied to clipboard', type: 'success' });
-                      }}
-                      style={({ pressed }) => [styles.contactCopyBtn, pressed && { opacity: 0.6 }]}
-                      hitSlop={8}
-                    >
-                      <SymbolView
-                        name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
-                        size={14}
-                        tintColor={c.primary}
-                      />
-                    </Pressable>
-                  </View>
-                );
-              }
-
-              if (appointment.job.customer) {
-                if (appointment.job.customer.email) {
-                  rows.push(
-                    <View key="email" style={[styles.contactRow, { backgroundColor: 'transparent', paddingHorizontal: 4, paddingVertical: 6, marginTop: 2 }]}>
-                      <View style={styles.contactRowInfo}>
-                        <SymbolView
-                          name={{ ios: 'envelope.fill', android: 'email', web: 'email' }}
-                          size={14}
-                          tintColor={c.primary}
-                        />
-                        <Text style={[styles.contactRowText, { color: c.text }]} numberOfLines={1}>
-                          {appointment.job.customer.email}
-                        </Text>
-                      </View>
-                      <Pressable
-                        onPress={() => {
-                          Clipboard.setStringAsync(appointment.job.customer!.email);
-                          showToast({ message: 'Email copied to clipboard', type: 'success' });
-                        }}
-                        style={({ pressed }) => [styles.contactCopyBtn, pressed && { opacity: 0.6 }]}
-                        hitSlop={8}
-                      >
-                        <SymbolView
-                          name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
-                          size={14}
-                          tintColor={c.primary}
-                        />
-                      </Pressable>
-                    </View>
-                  );
-                } else {
-                  rows.push(
-                    <Pressable
-                      key="add-email"
-                      onPress={() => {
-                        router.push({
-                          pathname: '/customer/edit',
-                          params: {
-                            id: appointment.job.customer!.id,
-                            name: appointment.job.customer!.name,
-                            phone: appointment.job.customer!.phone || '',
-                            email: '',
-                          },
-                        });
-                      }}
-                      style={({ pressed }) => [
-                        styles.contactRow,
-                        { backgroundColor: 'transparent', paddingHorizontal: 4, paddingVertical: 6, marginTop: 2 },
-                        pressed && { opacity: 0.6 }
-                      ]}
-                    >
-                      <View style={styles.contactRowInfo}>
-                        <SymbolView
-                          name={{ ios: 'envelope', android: 'email', web: 'email' }}
-                          size={14}
-                          tintColor={c.textMuted}
-                        />
-                        <Text style={[styles.contactRowText, { color: c.textMuted }]} numberOfLines={1}>
-                          Add customer email
-                        </Text>
-                      </View>
-                      <SymbolView
-                        name={{ ios: 'plus', android: 'add', web: 'add' }}
-                        size={14}
-                        tintColor={c.textMuted}
-                      />
-                    </Pressable>
-                  );
-                }
-              }
-
-              if (clientAddress) {
-                rows.push(
-                  <View key="address" style={[styles.contactRow, { backgroundColor: 'transparent', paddingHorizontal: 4, paddingVertical: 6, marginTop: 2 }]}>
-                    <View style={styles.contactRowInfo}>
-                      <SymbolView
-                        name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
-                        size={14}
-                        tintColor={c.primary}
-                      />
-                      <Text style={[styles.contactRowText, { color: c.text }]} numberOfLines={2}>
-                        {clientAddress}
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={() => {
-                        Clipboard.setStringAsync(clientAddress);
-                        showToast({ message: 'Address copied to clipboard', type: 'success' });
-                      }}
-                      style={({ pressed }) => [styles.contactCopyBtn, pressed && { opacity: 0.6 }]}
-                      hitSlop={8}
-                    >
-                      <SymbolView
-                        name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
-                        size={14}
-                        tintColor={c.primary}
-                      />
-                    </Pressable>
-                  </View>
-                );
-              }
-
-              return rows.map((row, idx) => (
-                <React.Fragment key={idx}>
-                  {idx > 0 && <View style={[styles.divider, { backgroundColor: c.divider, marginVertical: 2 }]} />}
-                  {row}
-                </React.Fragment>
-              ));
-            })()}
-          </View>
-        </Animated.View>
-
-        {/* ═══ JOB / SERVICES CARD ══════════════════════════════════════════════ */}
-        <Animated.View entering={FadeInDown.duration(500).delay(500)} style={{ paddingHorizontal: 16, marginTop: 12 }}>
-          <View style={[styles.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
-            <View style={styles.cardHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={[styles.cardHeaderIcon, { backgroundColor: c.successMuted }]}>
-                  <SymbolView
-                    name={{ ios: 'wrench.and.screwdriver.fill', android: 'build', web: 'build' }}
-                    size={14}
-                    tintColor={c.success}
-                  />
-                </View>
-                <Text style={[styles.cardTitle, { color: c.text }]}>Services</Text>
-              </View>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: c.textMuted }}>
-                {appointment.job.services?.length || 0} items
-              </Text>
-            </View>
-
-            {/* Services list */}
-            {appointment.job.services?.length === 0 ? (
-              <Text style={{ fontSize: 13, fontStyle: 'italic', color: c.textMuted, paddingVertical: 8 }}>
-                No services listed.
-              </Text>
-            ) : (
-              appointment.job.services?.map((svc, idx) => (
+              {/* Date & Time */}
+              <View style={styles.heroTimeRow}>
                 <Pressable
-                  key={svc.id}
-                  onPress={() => handleOpenEditService(svc)}
-                  style={({ pressed }) => [
-                    styles.serviceItem,
-                    {
-                      backgroundColor: idx % 2 === 0 ? c.inputBg : 'transparent',
-                      alignItems: svc.description ? 'flex-start' : 'center',
-                      opacity: pressed ? 0.7 : 1,
-                    },
-                  ]}
+                  onPress={() => setJobHistoryModalVisible(true)}
+                  style={({ pressed }) => [styles.heroTimePill, pressed && { opacity: 0.75 }]}
                 >
-                  <View style={{ flex: 1, gap: 2, paddingRight: 8 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: c.text }}>
-                      {svc.title || svc.name || 'Unnamed Service'}
-                    </Text>
-                    {svc.description ? (
-                      <Text style={{ fontSize: 12, color: c.textMuted }}>
-                        {svc.description}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: c.text, marginTop: svc.description ? 1 : 0 }}>
-                    ${parseFloat(svc.price).toFixed(2)}
+                  <SymbolView
+                    name={{ ios: 'calendar', android: 'calendar_today', web: 'calendar_today' }}
+                    size={12}
+                    tintColor="rgba(255,255,255,0.9)"
+                  />
+                  <Text style={styles.heroTimeText}>
+                    {formatDate(appointment.start, 'MMM DD, YYYY')}
                   </Text>
                 </Pressable>
-              ))
+                <Pressable
+                  onPress={() => setJobHistoryModalVisible(true)}
+                  style={({ pressed }) => [styles.heroTimePill, pressed && { opacity: 0.75 }]}
+                >
+                  <SymbolView
+                    name={{ ios: 'clock', android: 'schedule', web: 'schedule' }}
+                    size={12}
+                    tintColor="rgba(255,255,255,0.9)"
+                  />
+                  <Text style={styles.heroTimeText}>
+                    {formatDate(appointment.start, 'hh:mm A')} — {formatDate(appointment.end, 'hh:mm A')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleOpenEditTimeModal}
+                  style={({ pressed }) => [
+                    styles.heroTimePill,
+                    { backgroundColor: 'rgba(255,255,255,0.3)' },
+                    pressed && { opacity: 0.75 },
+                  ]}
+                >
+                  <SymbolView
+                    name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
+                    size={12}
+                    tintColor="#ffffff"
+                  />
+                  <Text style={styles.heroTimeText}>Edit</Text>
+                </Pressable>
+              </View>
+            </LinearGradient>
+          </Animated.View>
+
+          {/* ═══ ACTION BUTTONS ═══════════════════════════════════════════════════ */}
+          <Animated.View entering={FadeInDown.duration(500).delay(100)} style={styles.actionRow}>
+            {/* Status Action Button */}
+            <Pressable
+              onPress={handleStatusPress}
+              disabled={statusLoading}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                {
+                  backgroundColor: appointment.status === 2 ? c.inputBg : c.primaryMuted,
+                  borderColor: appointment.status === 2 ? c.divider : c.primary,
+                },
+                pressed && { transform: [{ scale: 0.96 }] },
+              ]}
+            >
+              {statusLoading ? (
+                <ActivityIndicator size="small" color={appointment.status === 2 ? c.textMuted : c.primary} />
+              ) : (
+                <>
+                  <SymbolView name={currentStatus.icon} size={16} tintColor={appointment.status === 2 ? c.textMuted : c.primary} />
+                  <Text style={[styles.actionBtnText, { color: appointment.status === 2 ? c.textMuted : c.primary }]}>
+                    {currentStatus.action}
+                  </Text>
+                </>
+              )}
+            </Pressable>
+
+            {/* Timer Button (only when active) */}
+            {appointment.status === 1 && companySettings?.timerEnabled === 'true' && (
+              <Pressable
+                onPress={handleToggleTimer}
+                disabled={timerLoading}
+                style={({ pressed }) => [
+                  styles.actionBtnCircle,
+                  {
+                    backgroundColor: isTimerRunning ? c.dangerMuted : c.successMuted,
+                    borderColor: isTimerRunning ? c.danger : c.success,
+                  },
+                  pressed && { transform: [{ scale: 0.92 }] },
+                ]}
+              >
+                {timerLoading ? (
+                  <ActivityIndicator size="small" color={isTimerRunning ? c.danger : c.success} />
+                ) : (
+                  <SymbolView
+                    name={isTimerRunning ? { ios: 'pause.fill', android: 'pause', web: 'pause' } : { ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }}
+                    size={18}
+                    tintColor={isTimerRunning ? c.danger : c.success}
+                  />
+                )}
+              </Pressable>
             )}
 
+            {/* Copy Button */}
             <Pressable
-              onPress={handleOpenAddService}
+              onPress={() => setCopyModalVisible(true)}
               style={({ pressed }) => [
-                styles.addServiceBtn,
-                {
-                  borderColor: isDark ? 'rgba(129, 140, 248, 0.35)' : 'rgba(99, 102, 241, 0.3)',
-                  backgroundColor: isDark ? 'rgba(129, 140, 248, 0.12)' : 'rgba(99, 102, 241, 0.08)',
-                  opacity: pressed ? 0.7 : 1,
-                },
+                styles.actionBtn,
+                { backgroundColor: c.card, borderColor: c.cardBorder },
+                pressed && { transform: [{ scale: 0.96 }] },
               ]}
             >
               <SymbolView
-                name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add' }}
+                name={{ ios: 'doc.on.doc.fill', android: 'content_copy', web: 'content_copy' }}
                 size={14}
                 tintColor={c.primary}
               />
-              <Text style={{ fontSize: 13, fontWeight: '600', color: c.primary }}>Add Service</Text>
+              <Text style={[styles.actionBtnText, { color: c.primary }]}>Copy</Text>
             </Pressable>
 
-            <View style={[styles.divider, { backgroundColor: c.divider, marginTop: 4 }]} />
+            {/* Pay Button */}
+            <Pressable
+              onPress={() => setPayModalVisible(true)}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                { backgroundColor: c.success, borderColor: c.success },
+                pressed && { transform: [{ scale: 0.96 }] },
+              ]}
+            >
+              <SymbolView
+                name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
+                size={14}
+                tintColor="#ffffff"
+              />
+              <Text style={[styles.actionBtnText, { color: '#ffffff' }]}>Pay</Text>
+            </Pressable>
+          </Animated.View>
 
-            {/* Totals */}
-            <View style={styles.totalsBlock}>
-              <View style={styles.totalRow}>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: c.textMuted }}>Subtotal</Text>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: c.text }}>
-                  ${subtotal.toFixed(2)}
-                </Text>
-              </View>
-              {taxAmount > 0 && (
-                <View style={styles.totalRow}>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: c.textMuted }}>
-                    Tax {taxRatePct > 0 ? `(${taxRatePct.toFixed(1)}%)` : ''}
-                  </Text>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: c.text }}>
-                    ${taxAmount.toFixed(2)}
+          {/* ═══ TIMER BANNER ══════════════════════════════════════════════════════ */}
+          {companySettings?.timerEnabled === 'true' && (
+            <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ paddingHorizontal: 16 }}>
+              <Pressable
+                onPress={() => setHistoryModalVisible(true)}
+                style={({ pressed }) => [
+                  styles.timerBanner,
+                  {
+                    backgroundColor: c.card,
+                    borderColor: isTimerRunning ? c.success : c.cardBorder,
+                    borderWidth: isTimerRunning ? 1.5 : 1,
+                  },
+                  pressed && { opacity: 0.9 },
+                ]}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  {isTimerRunning ? (
+                    <PulsingDot color={c.success} />
+                  ) : (
+                    <SymbolView
+                      name={{ ios: 'clock.fill', android: 'schedule', web: 'schedule' }}
+                      size={18}
+                      tintColor={c.textMuted}
+                    />
+                  )}
+                  <Text style={[
+                    styles.timerText,
+                    { color: isTimerRunning ? c.success : c.textMuted, fontVariant: ['tabular-nums'] },
+                  ]}>
+                    {formatTime(elapsedSeconds)}
                   </Text>
                 </View>
-              )}
-              <View style={[styles.totalRow, { marginTop: 4 }]}>
-                <Text style={{ fontSize: 15, fontWeight: '800', color: c.text }}>Total</Text>
-                <Text style={{ fontSize: 18, fontWeight: '800', color: c.text }}>
-                  ${appointment.job.totalAmount.toFixed(2)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: c.divider, marginVertical: 12 }]} />
-
-            {/* Payment Progress */}
-            <PaymentProgressBar
-              total={appointment.job.totalAmount}
-              remaining={appointment.job.remainingBalance}
-              isDark={isDark}
-            />
-
-            {/* Payments History */}
-            {appointment.job.payments && appointment.job.payments.length > 0 && (
-              <>
-                <View style={[styles.divider, { backgroundColor: c.divider, marginVertical: 12 }]} />
-                <View style={{ gap: 8 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: c.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Payment History
-                  </Text>
-                  {appointment.job.payments.map((payment: IPayment, idx: number) => {
-                    const amountVal = parseFloat(payment.amount);
-                    const isNegative = amountVal < 0;
-                    return (
-                      <View
-                        key={payment.id}
-                        style={[
-                          styles.paymentRow,
-                          {
-                            backgroundColor: idx % 2 === 0 ? c.inputBg : 'transparent',
-                          },
-                        ]}
-                      >
-                        <View style={{ flex: 1, gap: 2 }}>
-                          <Text style={{ fontSize: 13, fontWeight: '600', color: c.text }}>
-                            {payment.type_text || 'Payment'}
-                          </Text>
-                          <Text style={{ fontSize: 11, color: c.textMuted }}>
-                            {formatDate(payment.created_at, 'MMM DD, YYYY hh:mm A')}
-                          </Text>
-                        </View>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: isNegative ? c.danger : c.success }}>
-                          {isNegative ? '-' : '+'}${Math.abs(amountVal).toFixed(2)}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-          </View>
-        </Animated.View>
-
-        {/* ═══ JOB NOTES CARD ════════════════════════════════════════════════════ */}
-        <Animated.View entering={FadeInDown.duration(500).delay(600)} style={{ paddingHorizontal: 16, marginTop: 12 }}>
-          <View style={[styles.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
-            <View style={styles.cardHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={[styles.cardHeaderIcon, { backgroundColor: c.primaryMuted }]}>
+                <View style={[styles.timerHistoryBtn, { backgroundColor: c.primaryMuted }]}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: c.primary }}>History</Text>
                   <SymbolView
-                    name={{ ios: 'note.text', android: 'note', web: 'note' }}
-                    size={14}
+                    name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                    size={10}
                     tintColor={c.primary}
                   />
                 </View>
-                <Text style={[styles.cardTitle, { color: c.text }]}>Notes</Text>
-              </View>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: c.textMuted }}>
-                {appointment.job.notes?.length || 0} {appointment.job.notes?.length === 1 ? 'message' : 'messages'}
-              </Text>
-            </View>
+              </Pressable>
+            </Animated.View>
+          )}
 
-            {/* More messages button */}
-            {(appointment.job.notes && appointment.job.notes.length > 1) && (
-              <Pressable
-                onPress={() => {
-                  setFocusNotesInput(false);
+        </View>
+
+        {/* ═══ TAB BAR (sticky) ═════════════════════════════════════════════════ */}
+        <AppointmentTabBar tabs={tabs} active={activeTab} onChange={switchTab} isDark={isDark} />
+
+        {/* ═══ TAB CONTENT ═════════════════════════════════════════════════════ */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+          {visitedTabs.includes('work') && (
+            <View style={{ display: activeTab === 'work' ? 'flex' : 'none' }}>
+              <WorkTab
+                appointment={appointment}
+                token={token}
+                isDark={isDark}
+                formatDate={formatDate}
+                onAddService={handleOpenAddService}
+                onEditService={handleOpenEditService}
+                onRefresh={() => fetchDetails(true)}
+              />
+            </View>
+          )}
+          {visitedTabs.includes('photos') && (
+            <View style={{ display: activeTab === 'photos' ? 'flex' : 'none' }}>
+              <PhotosTab appointment={appointment} token={token} isDark={isDark} onRefresh={() => fetchDetails(true)} />
+            </View>
+          )}
+          {visitedTabs.includes('notes') && (
+            <View style={{ display: activeTab === 'notes' ? 'flex' : 'none' }}>
+              <NotesTab
+                appointment={appointment}
+                token={token}
+                isDark={isDark}
+                formatDate={formatDate}
+                onOpenNotesChat={(focusInput) => {
+                  setFocusNotesInput(focusInput);
                   setNotesModalVisible(true);
                 }}
-                style={({ pressed }) => [
-                  styles.moreNotesBtn,
-                  pressed && { opacity: 0.7 }
-                ]}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '700', color: c.primary }}>More messages</Text>
-              </Pressable>
-            )}
-
-            {/* Notes list - showing only the last message */}
-            {(!appointment.job.notes || appointment.job.notes.length === 0) ? (
-              <Text style={{ fontSize: 13, fontStyle: 'italic', color: c.textMuted, paddingVertical: 8 }}>
-                No notes added yet.
-              </Text>
-            ) : (
-              <View style={styles.notesList}>
-                {(() => {
-                  const note = appointment.job.notes[appointment.job.notes.length - 1];
-                  const isSelf = note.creator?.id === user?.id && user?.id !== undefined;
-                  return (
-                    <SwipeableNote
-                      note={note}
-                      isSelf={isSelf}
-                      canDelete={canDeleteNote(note)}
-                      onDelete={handleRemoveNote}
-                      loadingRemove={loadingRemoveNote === note.id}
-                      c={c}
-                      isDark={isDark}
-                      formatDate={formatDate}
-                      setScrollEnabled={setScrollEnabled}
-                    />
-                  );
-                })()}
-              </View>
-            )}
-
-            {/* Note Mock Input */}
-            <Pressable
-              onPress={() => {
-                setFocusNotesInput(true);
-                setNotesModalVisible(true);
-              }}
-              style={({ pressed }) => [
-                styles.mockNoteInput,
-                {
-                  backgroundColor: c.inputBg,
-                  borderColor: c.cardBorder,
-                },
-                pressed && { opacity: 0.8 }
-              ]}
-            >
-              <Text style={{ color: c.textMuted, fontSize: 13, flex: 1 }}>
-                Type note here...
-              </Text>
-              <SymbolView
-                name={{ ios: 'paperplane.fill', android: 'send', web: 'send' }}
-                size={14}
-                tintColor={c.textMuted}
+                onRemoveNote={handleRemoveNote}
+                loadingRemoveNote={loadingRemoveNote}
+                setScrollEnabled={setScrollEnabled}
+                onStickyCountChange={setOpenStickyCount}
               />
-            </Pressable>
-          </View>
-        </Animated.View>
+            </View>
+          )}
+          {visitedTabs.includes('info') && (
+            <View style={{ display: activeTab === 'info' ? 'flex' : 'none' }}>
+              <InfoTab appointment={appointment} token={token} isDark={isDark} onRefresh={() => fetchDetails(true)} />
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* ═══ MODAL COMPONENTS ══════════════════════════════════════════════════ */}

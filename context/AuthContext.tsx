@@ -24,12 +24,21 @@ export interface CompanyService {
   price: string;
 }
 
+export interface CompanyEmployee {
+  id: number;
+  name: string;
+  color: string;
+  active?: number;
+  roles_ids?: number[];
+}
+
 interface AuthContextType {
   token: string | null;
   user: User | null;
   isLoading: boolean;
   companySettings: CompanySettings | null;
   companyServices: CompanyService[];
+  companyEmployees: CompanyEmployee[];
   login: (token: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
   fetchInitialData: (token: string) => Promise<void>;
@@ -43,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [companyServices, setCompanyServices] = useState<CompanyService[]>([]);
+  const [companyEmployees, setCompanyEmployees] = useState<CompanyEmployee[]>([]);
 
   const fetchInitialData = async (activeToken: string) => {
     try {
@@ -66,6 +76,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setCompanyServices(data.companyServices);
           await storage.setItem('company_services', JSON.stringify(data.companyServices));
         }
+        if (data.companyEmployees) {
+          // Keep only the fields the app needs — the full payload carries presence/roles we don't use
+          const employees: CompanyEmployee[] = data.companyEmployees.map((e: any) => ({
+            id: e.id,
+            name: e.name,
+            color: e.color,
+            active: e.active,
+            roles_ids: e.roles_ids,
+          }));
+          setCompanyEmployees(employees);
+          await storage.setItem('company_employees', JSON.stringify(employees));
+        }
       }
     } catch (e) {
       console.error('Failed to fetch initial data', e);
@@ -79,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const storedUser = await storage.getItem('auth_user');
         const storedSettings = await storage.getItem('company_settings');
         const storedServices = await storage.getItem('company_services');
+        const storedEmployees = await storage.getItem('company_employees');
         
         if (storedToken) {
           setToken(storedToken);
@@ -104,6 +127,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setCompanyServices(JSON.parse(storedServices));
           } catch (e) {
             console.error('Failed to parse stored company services JSON', e);
+          }
+        }
+        if (storedEmployees) {
+          try {
+            setCompanyEmployees(JSON.parse(storedEmployees));
+          } catch (e) {
+            console.error('Failed to parse stored company employees JSON', e);
           }
         }
       } catch (e) {
@@ -134,17 +164,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await storage.removeItem('auth_user');
       await storage.removeItem('company_settings');
       await storage.removeItem('company_services');
+      await storage.removeItem('company_employees');
       setToken(null);
       setUser(null);
       setCompanySettings(null);
       setCompanyServices([]);
+      setCompanyEmployees([]);
     } catch (e) {
       console.error('Failed to remove auth data on logout', e);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ token, user, isLoading, companySettings, companyServices, login, logout, fetchInitialData }}>
+    <AuthContext.Provider value={{ token, user, isLoading, companySettings, companyServices, companyEmployees, login, logout, fetchInitialData }}>
       {children}
     </AuthContext.Provider>
   );
