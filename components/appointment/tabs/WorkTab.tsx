@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { API_URL } from '@/constants/Config';
 import { useToast } from '@/context/ToastContext';
 import { PaymentProgressBar } from '../AppointmentUI';
+import ExpenseModal from '../ExpenseModal';
+import SwipeToDelete from '../SwipeToDelete';
 import SendInvoiceModal from '../SendInvoiceModal';
 import { palette, styles } from '../styles';
 import { IAppointmentDetails, IExpense, IInvoice, IPayment, IService } from '../types';
@@ -18,9 +20,10 @@ interface Props {
   onAddService: () => void;
   onEditService: (svc: IService) => void;
   onRefresh: () => Promise<void> | void;
+  setScrollEnabled: (enabled: boolean) => void;
 }
 
-export default function WorkTab({ appointment, token, isDark, formatDate, onAddService, onEditService, onRefresh }: Props) {
+export default function WorkTab({ appointment, token, isDark, formatDate, onAddService, onEditService, onRefresh, setScrollEnabled }: Props) {
   const c = isDark ? palette.dark : palette.light;
 
   const services = appointment.job.services || [];
@@ -140,7 +143,7 @@ export default function WorkTab({ appointment, token, isDark, formatDate, onAddS
 
       {/* ═══ EXPENSES ═══ */}
       <Animated.View entering={FadeInDown.duration(350).delay(160)}>
-        <ExpensesCard appointment={appointment} token={token} isDark={isDark} onRefresh={onRefresh} />
+        <ExpensesCard appointment={appointment} token={token} isDark={isDark} onRefresh={onRefresh} setScrollEnabled={setScrollEnabled} />
       </Animated.View>
     </View>
   );
@@ -153,51 +156,21 @@ function ExpensesCard({
   token,
   isDark,
   onRefresh,
+  setScrollEnabled,
 }: {
   appointment: IAppointmentDetails;
   token: string | null;
   isDark: boolean;
   onRefresh: () => Promise<void> | void;
+  setScrollEnabled: (enabled: boolean) => void;
 }) {
   const c = isDark ? palette.dark : palette.light;
-  const { showToast } = useToast();
 
-  const [title, setTitle] = useState('');
-  const [amount, setAmount] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [removingId, setRemovingId] = useState(0);
 
   const expenses = appointment.job.expenses || [];
   const total = expenses.reduce((sum, e) => sum + parseFloat(String(e.amount || 0)), 0);
-
-  const parsedAmount = parseFloat(amount.replace(/[^0-9.]/g, ''));
-  const canSave = title.trim().length > 0 && !isNaN(parsedAmount) && parsedAmount > 0;
-
-  const addExpense = async () => {
-    if (saving || !canSave || !token) return;
-    setSaving(true);
-    try {
-      const response = await fetch(`${API_URL}/expenses/${appointment.job.id}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({ title: title.trim(), amount: parsedAmount }),
-      });
-      if (!response.ok) throw new Error(`Server returned status code ${response.status}`);
-      setTitle('');
-      setAmount('');
-      await onRefresh();
-      showToast({ message: 'Expense added', type: 'success' });
-    } catch (err: any) {
-      console.error(err);
-      Alert.alert('Error', err.message || 'Failed to add expense.');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const removeExpense = (expense: IExpense) => {
     if (!token) return;
@@ -233,66 +206,48 @@ function ExpensesCard({
       iconColor={c.warning}
       iconBg={c.warningMuted}
       c={c}
-      right={total > 0 ? `$${total.toFixed(2)}` : `${expenses.length} items`}
+      right={
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {total > 0 && <Text style={{ fontSize: 13, fontWeight: '700', color: c.textMuted }}>${total.toFixed(2)}</Text>}
+          <HeaderIconButton icon={{ ios: 'plus', android: 'add', web: 'add' }} onPress={() => setModalVisible(true)} c={c} />
+        </View>
+      }
     >
       {expenses.length === 0 ? (
         <EmptyText text="No expenses added yet." c={c} />
       ) : (
-        expenses.map((exp, idx) => (
-          <View key={exp.id} style={[styles.expenseRow, { backgroundColor: idx % 2 === 0 ? c.inputBg : 'transparent' }]}>
-            <Text style={{ flex: 1, fontSize: 13, fontWeight: '600', color: c.text }} numberOfLines={2}>
-              {exp.title}
-            </Text>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: c.text }}>
-              ${parseFloat(String(exp.amount || 0)).toFixed(2)}
-            </Text>
-            <Pressable onPress={() => removeExpense(exp)} hitSlop={8} disabled={removingId === exp.id} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
-              {removingId === exp.id ? (
-                <ActivityIndicator size="small" color={c.danger} />
-              ) : (
-                <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} size={16} tintColor={c.danger} />
-              )}
-            </Pressable>
-          </View>
-        ))
+        <View style={{ gap: 4 }}>
+          {expenses.map((exp, idx) => (
+            <SwipeToDelete
+              key={exp.id}
+              onDelete={() => removeExpense(exp)}
+              deleting={removingId === exp.id}
+              dangerColor={c.danger}
+              setScrollEnabled={setScrollEnabled}
+              // Opaque colors: the palette's translucent card/inputBg would let the red action area bleed through
+              style={{ backgroundColor: idx % 2 === 0 ? (isDark ? '#243247' : '#F4F5F7') : (isDark ? '#1E293B' : '#FFFFFF') }}
+            >
+              <View style={[styles.expenseRow, { opacity: removingId === exp.id ? 0.5 : 1 }]}>
+                <Text style={{ flex: 1, fontSize: 13, fontWeight: '600', color: c.text }} numberOfLines={2}>
+                  {exp.title}
+                </Text>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: c.text }}>
+                  ${parseFloat(String(exp.amount || 0)).toFixed(2)}
+                </Text>
+              </View>
+            </SwipeToDelete>
+          ))}
+        </View>
       )}
 
-      {/* Inline add form — techs add parts on the spot, so keep it one-tap away */}
-      <View style={styles.expenseInputRow}>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Part / item"
-          placeholderTextColor={c.textMuted}
-          returnKeyType="next"
-          style={[styles.expenseInput, { flex: 1.6, backgroundColor: c.inputBg, borderColor: c.cardBorder, color: c.text }]}
-        />
-        <TextInput
-          value={amount}
-          onChangeText={setAmount}
-          placeholder="$0.00"
-          placeholderTextColor={c.textMuted}
-          keyboardType="decimal-pad"
-          returnKeyType="done"
-          onSubmitEditing={addExpense}
-          style={[styles.expenseInput, { flex: 1, backgroundColor: c.inputBg, borderColor: c.cardBorder, color: c.text }]}
-        />
-        <Pressable
-          onPress={addExpense}
-          disabled={!canSave || saving}
-          style={({ pressed }) => [
-            styles.expenseAddBtn,
-            { backgroundColor: canSave ? c.primary : c.inputBg },
-            pressed && { opacity: 0.8 },
-          ]}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <SymbolView name={{ ios: 'plus', android: 'add', web: 'add' }} size={16} tintColor={canSave ? '#fff' : c.textMuted} />
-          )}
-        </Pressable>
-      </View>
+      <ExpenseModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        jobId={appointment.job.id}
+        token={token}
+        isDark={isDark}
+        onSuccess={onRefresh}
+      />
     </SectionCard>
   );
 }
@@ -365,26 +320,20 @@ function InvoicesCard({
       iconBg={c.warningMuted}
       c={c}
       right={
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          {invoices.length > 0 && <Text style={{ fontSize: 13, fontWeight: '700', color: c.textMuted }}>{invoices.length}</Text>}
-          <HeaderIconButton icon={{ ios: 'plus', android: 'add', web: 'add' }} onPress={openNew} c={c} />
-        </View>
+        <Pressable
+          onPress={openNew}
+          hitSlop={6}
+          style={({ pressed }) => [styles.sendInvoiceBtn, { backgroundColor: c.primary }, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
+        >
+          <SymbolView name={{ ios: 'paperplane.fill', android: 'send', web: 'send' }} size={12} tintColor="#fff" />
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>Send Invoice</Text>
+        </Pressable>
       }
     >
       {invoices.length === 0 ? (
-        <View style={{ alignItems: 'center', gap: 6, paddingVertical: 10 }}>
+        <View style={{ alignItems: 'center', gap: 4, paddingVertical: 10 }}>
           <Text style={{ fontSize: 13, fontWeight: '600', color: c.textSecondary }}>No invoices for this job yet</Text>
-          <Text style={{ fontSize: 12, color: c.textMuted, textAlign: 'center' }}>Create and send an invoice to bill the customer.</Text>
-          <Pressable
-            onPress={openNew}
-            style={({ pressed }) => [
-              { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: c.primary },
-              pressed && { opacity: 0.85 },
-            ]}
-          >
-            <SymbolView name={{ ios: 'paperplane.fill', android: 'send', web: 'send' }} size={14} tintColor="#fff" />
-            <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Send Invoice</Text>
-          </Pressable>
+          <Text style={{ fontSize: 12, color: c.textMuted, textAlign: 'center' }}>Tap "Send Invoice" to bill the customer.</Text>
         </View>
       ) : (
         <View style={{ gap: 8, paddingTop: 4 }}>

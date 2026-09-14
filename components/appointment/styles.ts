@@ -74,6 +74,21 @@ export const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 20,
     gap: 8,
+    overflow: 'hidden',
+  },
+  heroLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  heroFixedBg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    overflow: 'hidden',
   },
   heroBackBtn: {
     width: 36,
@@ -806,6 +821,11 @@ export const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
   },
+  tabPage: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
   headerIconBtn: {
     width: 30,
     height: 30,
@@ -874,26 +894,6 @@ export const styles = StyleSheet.create({
     borderRadius: 10,
     gap: 10,
   },
-  expenseInputRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 6,
-  },
-  expenseInput: {
-    height: 42,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  expenseAddBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 
   // ─── Invoices ─────────────────────────────────────────────────────
   invoiceRow: {
@@ -914,6 +914,14 @@ export const styles = StyleSheet.create({
   invoiceBadgeText: {
     fontSize: 10,
     fontWeight: '700',
+  },
+  sendInvoiceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
   },
   invoiceIconBtn: {
     width: 32,

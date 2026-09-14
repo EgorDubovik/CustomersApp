@@ -8,7 +8,7 @@ import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,10 +16,13 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Image,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { FadeInDown, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 // Subcomponents and Assets
 import { PulsingDot } from '@/components/appointment/AppointmentUI';
@@ -38,6 +41,7 @@ import TimerHistoryModal from '@/components/appointment/TimerHistoryModal';
 
 import { palette, styles } from '@/components/appointment/styles';
 import { AppointmentTabKey, IAppointmentDetails, IService } from '@/components/appointment/types';
+import { buildStaticMapUrl } from '@/components/appointment/staticMap';
 
 export default function AppointmentDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -80,15 +84,104 @@ export default function AppointmentDetailsScreen() {
   const [focusNotesInput, setFocusNotesInput] = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
 
-  // Tabs — content is mounted on first visit and kept alive so in-progress
-  // input (expense form, tech selection) survives switching tabs
+  // Tabs — rendered as a horizontal pager so the user can swipe between them.
+  // All pages stay mounted; the pager's height follows the active page.
+  const TAB_ORDER: AppointmentTabKey[] = ['work', 'photos', 'notes', 'info'];
+  const { width: pageWidth, height: screenHeight } = useWindowDimensions();
+  const pagerRef = useRef<ScrollView>(null);
   const [activeTab, setActiveTab] = useState<AppointmentTabKey>('work');
-  const [visitedTabs, setVisitedTabs] = useState<AppointmentTabKey[]>(['work']);
+  // Height follows `settledTab`, which only changes once a swipe has finished, so the
+  // outgoing page isn't clipped mid-gesture; the tab highlight (`activeTab`) updates live.
+  const [settledTab, setSettledTab] = useState<AppointmentTabKey>('work');
+  const [pageHeights, setPageHeights] = useState<Partial<Record<AppointmentTabKey, number>>>({});
   const [openStickyCount, setOpenStickyCount] = useState<number | null>(null);
+
+  // Hero map: a fixed layer behind the ScrollView, taller than the hero by half a screen.
+  // A pan gesture (same on iOS and Android — native bounce is disabled) lets the user pull
+  // the whole content down by up to half a screen; the map layer follows at half speed so
+  // the visible window grows symmetrically around the address pin.
+  const [heroHeight, setHeroHeight] = useState(0);
+  const [heroMapLoaded, setHeroMapLoaded] = useState(false);
+  const maxPull = screenHeight / 2;
+  const mapHeight = heroHeight + maxPull;
+  const scrollY = useSharedValue(0);
+  const pullY = useSharedValue(0);
+  const touchStart = useSharedValue({ x: 0, y: 0 });
+
+  const onVerticalScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
+
+  const pullGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .manualActivation(true)
+        .onTouchesDown((e) => {
+          const t = e.allTouches[0];
+          if (t) touchStart.value = { x: t.x, y: t.y };
+        })
+        .onTouchesMove((e, state) => {
+          const t = e.allTouches[0];
+          if (!t) return;
+          const dx = t.x - touchStart.value.x;
+          const dy = t.y - touchStart.value.y;
+          // Horizontal → the tab pager / swipe-to-delete rows own it
+          if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+            state.fail();
+            return;
+          }
+          // Upward, or not at the top → the ScrollView owns it
+          if (dy < -4 || (dy > 8 && scrollY.value > 0)) {
+            state.fail();
+            return;
+          }
+          if (dy > 8 && scrollY.value <= 0) state.activate();
+        })
+        .onUpdate((e) => {
+          const t = Math.max(0, e.translationY);
+          // Progressive resistance that asymptotically approaches maxPull
+          pullY.value = t / (1 + t / maxPull);
+        })
+        .onFinalize(() => {
+          pullY.value = withSpring(0, { damping: 18, stiffness: 170, mass: 0.6 });
+        }),
+    [maxPull],
+  );
+
+  const pulledContentStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: pullY.value }],
+  }));
+  const mapLayerStyle = useAnimatedStyle(() => {
+    const base = -(mapHeight - heroHeight) / 2; // centre the tall image on the hero
+    // Follow the hero while scrolling; open up at half speed while pulling
+    return { transform: [{ translateY: base - scrollY.value + pullY.value / 2 }] };
+  });
+  // The scrim thins out as the map opens so the revealed area reads as a map, not a dimmed banner
+  const heroScrimStyle = useAnimatedStyle(() => ({
+    opacity: 1 - (pullY.value / maxPull) * 0.7,
+  }));
 
   const switchTab = (key: AppointmentTabKey) => {
     setActiveTab(key);
-    setVisitedTabs((prev) => (prev.includes(key) ? prev : [...prev, key]));
+    setSettledTab(key);
+    pagerRef.current?.scrollTo({ x: TAB_ORDER.indexOf(key) * pageWidth, animated: true });
+  };
+
+  const tabAtOffset = (x: number) => TAB_ORDER[Math.max(0, Math.min(TAB_ORDER.length - 1, Math.round(x / pageWidth)))];
+
+  const onPagerScroll = (x: number) => {
+    const key = tabAtOffset(x);
+    if (key !== activeTab) setActiveTab(key);
+  };
+
+  const onPagerSettled = (x: number) => {
+    const key = tabAtOffset(x);
+    setActiveTab(key);
+    setSettledTab(key);
+  };
+
+  const onPageLayout = (key: AppointmentTabKey, height: number) => {
+    setPageHeights((prev) => (prev[key] === height ? prev : { ...prev, [key]: height }));
   };
 
   // Fetch Appointment Details
@@ -385,6 +478,17 @@ export default function AppointmentDetailsScreen() {
   const currentStatus = statusConfig[appointment.status] || statusConfig[0];
   const customerName = appointment.job.customer?.name || 'Unknown Client';
 
+  const heroMapUrl = heroHeight
+    ? buildStaticMapUrl({
+        lat: appointment.job.address?.lat,
+        lon: appointment.job.address?.lon,
+        width: pageWidth,
+        height: mapHeight,
+        isDark,
+        markerColor: currentStatus.color,
+      })
+    : null;
+
   const tabs: TabDef[] = [
     { key: 'work', label: 'Work', icon: { ios: 'wrench.and.screwdriver.fill', android: 'build', web: 'build' } },
     { key: 'photos', label: 'Photos', icon: { ios: 'photo.fill', android: 'photo', web: 'photo' }, badge: appointment.job.images?.length },
@@ -406,317 +510,363 @@ export default function AppointmentDetailsScreen() {
 
   // ─── RENDER ─────────────────────────────────────────────────────────────────
   return (
-    <View style={{ flex: 1 }}>
-      <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView
-        scrollEnabled={scrollEnabled}
-        style={{ flex: 1, backgroundColor: c.bg }}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[1]}
-      >
-        {/* Child 0: hero + actions + timer. Child 1: sticky tab bar. Child 2: tab content. */}
-        <View>
-          {/* ═══ HERO SECTION ═══════════════════════════════════════════════════════ */}
-          <Animated.View entering={FadeInDown.duration(500)}>
-            <LinearGradient
-              colors={currentStatus.gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.heroSection}
-            >
-              {/* Back button */}
-              <Pressable
-                onPress={() => router.back()}
-                style={({ pressed }) => [styles.heroBackBtn, pressed && { opacity: 0.7 }]}
-                hitSlop={12}
-              >
-                <SymbolView
-                  name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                  size={18}
-                  tintColor="#ffffff"
-                />
-              </Pressable>
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <Stack.Screen options={{ headerShown: false, gestureEnabled: false }} />
 
-              {/* Customer Name */}
-              <Text style={styles.heroCustomerName}>{customerName}</Text>
+      {/* ═══ FIXED MAP LAYER (behind the ScrollView) ═══════════════════════════ */}
+      {/* Gradient fills the whole area as the fallback; the map image is centred on the hero */}
+      <View pointerEvents="none" style={[styles.heroFixedBg, { height: mapHeight + screenHeight / 2 }]}>
+        <LinearGradient colors={currentStatus.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroLayer} />
+        {heroMapUrl && (
+          <Animated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0, height: mapHeight }, mapLayerStyle]}>
+            <Image
+              source={{ uri: heroMapUrl }}
+              style={[styles.heroLayer, { opacity: heroMapLoaded ? 1 : 0 }]}
+              resizeMode="cover"
+              onLoad={() => setHeroMapLoaded(true)}
+              onError={() => setHeroMapLoaded(false)}
+            />
+          </Animated.View>
+        )}
+      </View>
 
-              {/* Address — tap opens maps, copy button copies to clipboard */}
-              {appointment.job.address?.full && (
-                <Pressable
-                  onPress={() => {
-                    const address = encodeURIComponent(appointment.job.address!.full);
-                    let url = '';
-                    if (navigationMap === 'google') {
-                      url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
-                    } else {
-                      url = Platform.select({
-                        ios: `maps://app?daddr=${address}`,
-                        android: `google.navigation:q=${address}`,
-                        default: `https://www.google.com/maps/dir/?api=1&destination=${address}`,
-                      }) || '';
-                    }
-                    Linking.openURL(url);
-                  }}
-                  style={({ pressed }) => [styles.heroAddressRow, pressed && { opacity: 0.75 }]}
-                >
-                  <View style={styles.heroAddressIconWrap}>
-                    <SymbolView
-                      name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
-                      size={16}
-                      tintColor="#ffffff"
-                    />
-                  </View>
-                  <Text style={styles.heroAddressText} numberOfLines={2}>
-                    {appointment.job.address.full}
-                  </Text>
+      <GestureDetector gesture={pullGesture}>
+        <Animated.View style={[{ flex: 1 }, pulledContentStyle]}>
+          <Animated.ScrollView
+            scrollEnabled={scrollEnabled}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 40 }}
+            showsVerticalScrollIndicator={false}
+            stickyHeaderIndices={[1]}
+            onScroll={onVerticalScroll}
+            scrollEventThrottle={16}
+            bounces={false}
+            overScrollMode="never"
+          >
+            {/* Child 0: hero + actions + timer. Child 1: sticky tab bar. Child 2: tab content. */}
+            <View>
+              {/* ═══ HERO SECTION (transparent — the fixed map layer shows through) ═════ */}
+              <Animated.View entering={FadeInDown.duration(500)}>
+                <View style={styles.heroSection} onLayout={(e) => setHeroHeight(Math.round(e.nativeEvent.layout.height))}>
+                  {/* Scrim so white text stays readable over the map; scrolls with the hero text */}
+                  {heroMapUrl && heroMapLoaded && (
+                    <Animated.View style={[styles.heroLayer, heroScrimStyle]}>
+                      <LinearGradient
+                        colors={['rgba(2,6,23,0.20)', 'rgba(2,6,23,0.45)', 'rgba(2,6,23,0.80)']}
+                        locations={[0, 0.45, 1]}
+                        style={styles.heroLayer}
+                      />
+                    </Animated.View>
+                  )}
+
+                  {/* Back button */}
                   <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      Clipboard.setStringAsync(appointment.job.address!.full);
-                      showToast({ message: 'Address copied to clipboard', type: 'success' });
-                    }}
-                    style={({ pressed }) => [styles.heroCopyBtn, pressed && { backgroundColor: 'rgba(255,255,255,0.35)' }]}
-                    hitSlop={6}
+                    onPress={() => router.back()}
+                    style={({ pressed }) => [styles.heroBackBtn, pressed && { opacity: 0.7 }]}
+                    hitSlop={12}
                   >
                     <SymbolView
-                      name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
-                      size={14}
+                      name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+                      size={18}
                       tintColor="#ffffff"
                     />
                   </Pressable>
-                </Pressable>
-              )}
 
-              {/* Date & Time */}
-              <View style={styles.heroTimeRow}>
-                <Pressable
-                  onPress={() => setJobHistoryModalVisible(true)}
-                  style={({ pressed }) => [styles.heroTimePill, pressed && { opacity: 0.75 }]}
-                >
-                  <SymbolView
-                    name={{ ios: 'calendar', android: 'calendar_today', web: 'calendar_today' }}
-                    size={12}
-                    tintColor="rgba(255,255,255,0.9)"
-                  />
-                  <Text style={styles.heroTimeText}>
-                    {formatDate(appointment.start, 'MMM DD, YYYY')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setJobHistoryModalVisible(true)}
-                  style={({ pressed }) => [styles.heroTimePill, pressed && { opacity: 0.75 }]}
-                >
-                  <SymbolView
-                    name={{ ios: 'clock', android: 'schedule', web: 'schedule' }}
-                    size={12}
-                    tintColor="rgba(255,255,255,0.9)"
-                  />
-                  <Text style={styles.heroTimeText}>
-                    {formatDate(appointment.start, 'hh:mm A')} — {formatDate(appointment.end, 'hh:mm A')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={handleOpenEditTimeModal}
-                  style={({ pressed }) => [
-                    styles.heroTimePill,
-                    { backgroundColor: 'rgba(255,255,255,0.3)' },
-                    pressed && { opacity: 0.75 },
-                  ]}
-                >
-                  <SymbolView
-                    name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
-                    size={12}
-                    tintColor="#ffffff"
-                  />
-                  <Text style={styles.heroTimeText}>Edit</Text>
-                </Pressable>
-              </View>
-            </LinearGradient>
-          </Animated.View>
+                  {/* Customer Name */}
+                  <Text style={styles.heroCustomerName}>{customerName}</Text>
 
-          {/* ═══ ACTION BUTTONS ═══════════════════════════════════════════════════ */}
-          <Animated.View entering={FadeInDown.duration(500).delay(100)} style={styles.actionRow}>
-            {/* Status Action Button */}
-            <Pressable
-              onPress={handleStatusPress}
-              disabled={statusLoading}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                {
-                  backgroundColor: appointment.status === 2 ? c.inputBg : c.primaryMuted,
-                  borderColor: appointment.status === 2 ? c.divider : c.primary,
-                },
-                pressed && { transform: [{ scale: 0.96 }] },
-              ]}
-            >
-              {statusLoading ? (
-                <ActivityIndicator size="small" color={appointment.status === 2 ? c.textMuted : c.primary} />
-              ) : (
-                <>
-                  <SymbolView name={currentStatus.icon} size={16} tintColor={appointment.status === 2 ? c.textMuted : c.primary} />
-                  <Text style={[styles.actionBtnText, { color: appointment.status === 2 ? c.textMuted : c.primary }]}>
-                    {currentStatus.action}
-                  </Text>
-                </>
-              )}
-            </Pressable>
-
-            {/* Timer Button (only when active) */}
-            {appointment.status === 1 && companySettings?.timerEnabled === 'true' && (
-              <Pressable
-                onPress={handleToggleTimer}
-                disabled={timerLoading}
-                style={({ pressed }) => [
-                  styles.actionBtnCircle,
-                  {
-                    backgroundColor: isTimerRunning ? c.dangerMuted : c.successMuted,
-                    borderColor: isTimerRunning ? c.danger : c.success,
-                  },
-                  pressed && { transform: [{ scale: 0.92 }] },
-                ]}
-              >
-                {timerLoading ? (
-                  <ActivityIndicator size="small" color={isTimerRunning ? c.danger : c.success} />
-                ) : (
-                  <SymbolView
-                    name={isTimerRunning ? { ios: 'pause.fill', android: 'pause', web: 'pause' } : { ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }}
-                    size={18}
-                    tintColor={isTimerRunning ? c.danger : c.success}
-                  />
-                )}
-              </Pressable>
-            )}
-
-            {/* Copy Button */}
-            <Pressable
-              onPress={() => setCopyModalVisible(true)}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                { backgroundColor: c.card, borderColor: c.cardBorder },
-                pressed && { transform: [{ scale: 0.96 }] },
-              ]}
-            >
-              <SymbolView
-                name={{ ios: 'doc.on.doc.fill', android: 'content_copy', web: 'content_copy' }}
-                size={14}
-                tintColor={c.primary}
-              />
-              <Text style={[styles.actionBtnText, { color: c.primary }]}>Copy</Text>
-            </Pressable>
-
-            {/* Pay Button */}
-            <Pressable
-              onPress={() => setPayModalVisible(true)}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                { backgroundColor: c.success, borderColor: c.success },
-                pressed && { transform: [{ scale: 0.96 }] },
-              ]}
-            >
-              <SymbolView
-                name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
-                size={14}
-                tintColor="#ffffff"
-              />
-              <Text style={[styles.actionBtnText, { color: '#ffffff' }]}>Pay</Text>
-            </Pressable>
-          </Animated.View>
-
-          {/* ═══ TIMER BANNER ══════════════════════════════════════════════════════ */}
-          {companySettings?.timerEnabled === 'true' && (
-            <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ paddingHorizontal: 16 }}>
-              <Pressable
-                onPress={() => setHistoryModalVisible(true)}
-                style={({ pressed }) => [
-                  styles.timerBanner,
-                  {
-                    backgroundColor: c.card,
-                    borderColor: isTimerRunning ? c.success : c.cardBorder,
-                    borderWidth: isTimerRunning ? 1.5 : 1,
-                  },
-                  pressed && { opacity: 0.9 },
-                ]}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                  {isTimerRunning ? (
-                    <PulsingDot color={c.success} />
-                  ) : (
-                    <SymbolView
-                      name={{ ios: 'clock.fill', android: 'schedule', web: 'schedule' }}
-                      size={18}
-                      tintColor={c.textMuted}
-                    />
+                  {/* Address — tap opens maps, copy button copies to clipboard */}
+                  {appointment.job.address?.full && (
+                    <Pressable
+                      onPress={() => {
+                        const address = encodeURIComponent(appointment.job.address!.full);
+                        let url = '';
+                        if (navigationMap === 'google') {
+                          url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
+                        } else {
+                          url = Platform.select({
+                            ios: `maps://app?daddr=${address}`,
+                            android: `google.navigation:q=${address}`,
+                            default: `https://www.google.com/maps/dir/?api=1&destination=${address}`,
+                          }) || '';
+                        }
+                        Linking.openURL(url);
+                      }}
+                      style={({ pressed }) => [styles.heroAddressRow, pressed && { opacity: 0.75 }]}
+                    >
+                      <View style={styles.heroAddressIconWrap}>
+                        <SymbolView
+                          name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
+                          size={16}
+                          tintColor="#ffffff"
+                        />
+                      </View>
+                      <Text style={styles.heroAddressText} numberOfLines={2}>
+                        {appointment.job.address.full}
+                      </Text>
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          Clipboard.setStringAsync(appointment.job.address!.full);
+                          showToast({ message: 'Address copied to clipboard', type: 'success' });
+                        }}
+                        style={({ pressed }) => [styles.heroCopyBtn, pressed && { backgroundColor: 'rgba(255,255,255,0.35)' }]}
+                        hitSlop={6}
+                      >
+                        <SymbolView
+                          name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }}
+                          size={14}
+                          tintColor="#ffffff"
+                        />
+                      </Pressable>
+                    </Pressable>
                   )}
-                  <Text style={[
-                    styles.timerText,
-                    { color: isTimerRunning ? c.success : c.textMuted, fontVariant: ['tabular-nums'] },
-                  ]}>
-                    {formatTime(elapsedSeconds)}
-                  </Text>
+
+                  {/* Date & Time */}
+                  <View style={styles.heroTimeRow}>
+                    <Pressable
+                      onPress={() => setJobHistoryModalVisible(true)}
+                      style={({ pressed }) => [styles.heroTimePill, pressed && { opacity: 0.75 }]}
+                    >
+                      <SymbolView
+                        name={{ ios: 'calendar', android: 'calendar_today', web: 'calendar_today' }}
+                        size={12}
+                        tintColor="rgba(255,255,255,0.9)"
+                      />
+                      <Text style={styles.heroTimeText}>
+                        {formatDate(appointment.start, 'MMM DD, YYYY')}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setJobHistoryModalVisible(true)}
+                      style={({ pressed }) => [styles.heroTimePill, pressed && { opacity: 0.75 }]}
+                    >
+                      <SymbolView
+                        name={{ ios: 'clock', android: 'schedule', web: 'schedule' }}
+                        size={12}
+                        tintColor="rgba(255,255,255,0.9)"
+                      />
+                      <Text style={styles.heroTimeText}>
+                        {formatDate(appointment.start, 'hh:mm A')} — {formatDate(appointment.end, 'hh:mm A')}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={handleOpenEditTimeModal}
+                      style={({ pressed }) => [
+                        styles.heroTimePill,
+                        { backgroundColor: 'rgba(255,255,255,0.3)' },
+                        pressed && { opacity: 0.75 },
+                      ]}
+                    >
+                      <SymbolView
+                        name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
+                        size={12}
+                        tintColor="#ffffff"
+                      />
+                      <Text style={styles.heroTimeText}>Edit</Text>
+                    </Pressable>
+                  </View>
                 </View>
-                <View style={[styles.timerHistoryBtn, { backgroundColor: c.primaryMuted }]}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: c.primary }}>History</Text>
-                  <SymbolView
-                    name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                    size={10}
-                    tintColor={c.primary}
+              </Animated.View>
+
+              <View style={{ backgroundColor: c.bg }}>
+                {/* ═══ ACTION BUTTONS ═══════════════════════════════════════════════════ */}
+                <Animated.View entering={FadeInDown.duration(500).delay(100)} style={styles.actionRow}>
+                  {/* Status Action Button */}
+                  <Pressable
+                    onPress={handleStatusPress}
+                    disabled={statusLoading}
+                    style={({ pressed }) => [
+                      styles.actionBtn,
+                      {
+                        backgroundColor: appointment.status === 2 ? c.inputBg : c.primaryMuted,
+                        borderColor: appointment.status === 2 ? c.divider : c.primary,
+                      },
+                      pressed && { transform: [{ scale: 0.96 }] },
+                    ]}
+                  >
+                    {statusLoading ? (
+                      <ActivityIndicator size="small" color={appointment.status === 2 ? c.textMuted : c.primary} />
+                    ) : (
+                      <>
+                        <SymbolView name={currentStatus.icon} size={16} tintColor={appointment.status === 2 ? c.textMuted : c.primary} />
+                        <Text style={[styles.actionBtnText, { color: appointment.status === 2 ? c.textMuted : c.primary }]}>
+                          {currentStatus.action}
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+
+                  {/* Timer Button (only when active) */}
+                  {appointment.status === 1 && companySettings?.timerEnabled === 'true' && (
+                    <Pressable
+                      onPress={handleToggleTimer}
+                      disabled={timerLoading}
+                      style={({ pressed }) => [
+                        styles.actionBtnCircle,
+                        {
+                          backgroundColor: isTimerRunning ? c.dangerMuted : c.successMuted,
+                          borderColor: isTimerRunning ? c.danger : c.success,
+                        },
+                        pressed && { transform: [{ scale: 0.92 }] },
+                      ]}
+                    >
+                      {timerLoading ? (
+                        <ActivityIndicator size="small" color={isTimerRunning ? c.danger : c.success} />
+                      ) : (
+                        <SymbolView
+                          name={isTimerRunning ? { ios: 'pause.fill', android: 'pause', web: 'pause' } : { ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }}
+                          size={18}
+                          tintColor={isTimerRunning ? c.danger : c.success}
+                        />
+                      )}
+                    </Pressable>
+                  )}
+
+                  {/* Copy Button */}
+                  <Pressable
+                    onPress={() => setCopyModalVisible(true)}
+                    style={({ pressed }) => [
+                      styles.actionBtn,
+                      { backgroundColor: c.card, borderColor: c.cardBorder },
+                      pressed && { transform: [{ scale: 0.96 }] },
+                    ]}
+                  >
+                    <SymbolView
+                      name={{ ios: 'doc.on.doc.fill', android: 'content_copy', web: 'content_copy' }}
+                      size={14}
+                      tintColor={c.primary}
+                    />
+                    <Text style={[styles.actionBtnText, { color: c.primary }]}>Copy</Text>
+                  </Pressable>
+
+                  {/* Pay Button */}
+                  <Pressable
+                    onPress={() => setPayModalVisible(true)}
+                    style={({ pressed }) => [
+                      styles.actionBtn,
+                      { backgroundColor: c.success, borderColor: c.success },
+                      pressed && { transform: [{ scale: 0.96 }] },
+                    ]}
+                  >
+                    <SymbolView
+                      name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
+                      size={14}
+                      tintColor="#ffffff"
+                    />
+                    <Text style={[styles.actionBtnText, { color: '#ffffff' }]}>Pay</Text>
+                  </Pressable>
+                </Animated.View>
+
+                {/* ═══ TIMER BANNER ══════════════════════════════════════════════════════ */}
+                {companySettings?.timerEnabled === 'true' && (
+                  <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ paddingHorizontal: 16 }}>
+                    <Pressable
+                      onPress={() => setHistoryModalVisible(true)}
+                      style={({ pressed }) => [
+                        styles.timerBanner,
+                        {
+                          backgroundColor: c.card,
+                          borderColor: isTimerRunning ? c.success : c.cardBorder,
+                          borderWidth: isTimerRunning ? 1.5 : 1,
+                        },
+                        pressed && { opacity: 0.9 },
+                      ]}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                        {isTimerRunning ? (
+                          <PulsingDot color={c.success} />
+                        ) : (
+                          <SymbolView
+                            name={{ ios: 'clock.fill', android: 'schedule', web: 'schedule' }}
+                            size={18}
+                            tintColor={c.textMuted}
+                          />
+                        )}
+                        <Text style={[
+                          styles.timerText,
+                          { color: isTimerRunning ? c.success : c.textMuted, fontVariant: ['tabular-nums'] },
+                        ]}>
+                          {formatTime(elapsedSeconds)}
+                        </Text>
+                      </View>
+                      <View style={[styles.timerHistoryBtn, { backgroundColor: c.primaryMuted }]}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: c.primary }}>History</Text>
+                        <SymbolView
+                          name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                          size={10}
+                          tintColor={c.primary}
+                        />
+                      </View>
+                    </Pressable>
+                  </Animated.View>
+                )}
+
+              </View>
+            </View>
+
+            {/* ═══ TAB BAR (sticky) ═════════════════════════════════════════════════ */}
+            <AppointmentTabBar tabs={tabs} active={activeTab} onChange={switchTab} isDark={isDark} />
+
+            {/* ═══ TAB CONTENT (horizontal pager) ══════════════════════════════════ */}
+            <ScrollView
+              ref={pagerRef}
+              horizontal
+              pagingEnabled
+              scrollEnabled={scrollEnabled}
+              showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onScroll={(e) => onPagerScroll(e.nativeEvent.contentOffset.x)}
+              onMomentumScrollEnd={(e) => onPagerSettled(e.nativeEvent.contentOffset.x)}
+              contentContainerStyle={{ alignItems: 'flex-start' }}
+              style={{ height: pageHeights[settledTab], overflow: 'hidden', backgroundColor: c.bg }}
+            >
+              <View style={{ width: pageWidth }} onLayout={(e) => onPageLayout('work', e.nativeEvent.layout.height)}>
+                <View style={styles.tabPage}>
+                  <WorkTab
+                    appointment={appointment}
+                    token={token}
+                    isDark={isDark}
+                    formatDate={formatDate}
+                    onAddService={handleOpenAddService}
+                    onEditService={handleOpenEditService}
+                    onRefresh={() => fetchDetails(true)}
+                    setScrollEnabled={setScrollEnabled}
                   />
                 </View>
-              </Pressable>
-            </Animated.View>
-          )}
-
-        </View>
-
-        {/* ═══ TAB BAR (sticky) ═════════════════════════════════════════════════ */}
-        <AppointmentTabBar tabs={tabs} active={activeTab} onChange={switchTab} isDark={isDark} />
-
-        {/* ═══ TAB CONTENT ═════════════════════════════════════════════════════ */}
-        <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
-          {visitedTabs.includes('work') && (
-            <View style={{ display: activeTab === 'work' ? 'flex' : 'none' }}>
-              <WorkTab
-                appointment={appointment}
-                token={token}
-                isDark={isDark}
-                formatDate={formatDate}
-                onAddService={handleOpenAddService}
-                onEditService={handleOpenEditService}
-                onRefresh={() => fetchDetails(true)}
-              />
-            </View>
-          )}
-          {visitedTabs.includes('photos') && (
-            <View style={{ display: activeTab === 'photos' ? 'flex' : 'none' }}>
-              <PhotosTab appointment={appointment} token={token} isDark={isDark} onRefresh={() => fetchDetails(true)} />
-            </View>
-          )}
-          {visitedTabs.includes('notes') && (
-            <View style={{ display: activeTab === 'notes' ? 'flex' : 'none' }}>
-              <NotesTab
-                appointment={appointment}
-                token={token}
-                isDark={isDark}
-                formatDate={formatDate}
-                onOpenNotesChat={(focusInput) => {
-                  setFocusNotesInput(focusInput);
-                  setNotesModalVisible(true);
-                }}
-                onRemoveNote={handleRemoveNote}
-                loadingRemoveNote={loadingRemoveNote}
-                setScrollEnabled={setScrollEnabled}
-                onStickyCountChange={setOpenStickyCount}
-              />
-            </View>
-          )}
-          {visitedTabs.includes('info') && (
-            <View style={{ display: activeTab === 'info' ? 'flex' : 'none' }}>
-              <InfoTab appointment={appointment} token={token} isDark={isDark} onRefresh={() => fetchDetails(true)} />
-            </View>
-          )}
-        </View>
-      </ScrollView>
+              </View>
+              <View style={{ width: pageWidth }} onLayout={(e) => onPageLayout('photos', e.nativeEvent.layout.height)}>
+                <View style={styles.tabPage}>
+                  <PhotosTab appointment={appointment} token={token} isDark={isDark} onRefresh={() => fetchDetails(true)} />
+                </View>
+              </View>
+              <View style={{ width: pageWidth }} onLayout={(e) => onPageLayout('notes', e.nativeEvent.layout.height)}>
+                <View style={styles.tabPage}>
+                  <NotesTab
+                    appointment={appointment}
+                    token={token}
+                    isDark={isDark}
+                    formatDate={formatDate}
+                    onOpenNotesChat={(focusInput) => {
+                      setFocusNotesInput(focusInput);
+                      setNotesModalVisible(true);
+                    }}
+                    onRemoveNote={handleRemoveNote}
+                    loadingRemoveNote={loadingRemoveNote}
+                    setScrollEnabled={setScrollEnabled}
+                    onStickyCountChange={setOpenStickyCount}
+                  />
+                </View>
+              </View>
+              <View style={{ width: pageWidth }} onLayout={(e) => onPageLayout('info', e.nativeEvent.layout.height)}>
+                <View style={styles.tabPage}>
+                  <InfoTab appointment={appointment} token={token} isDark={isDark} onRefresh={() => fetchDetails(true)} />
+                </View>
+              </View>
+            </ScrollView>
+          </Animated.ScrollView>
+        </Animated.View>
+      </GestureDetector>
 
       {/* ═══ MODAL COMPONENTS ══════════════════════════════════════════════════ */}
 

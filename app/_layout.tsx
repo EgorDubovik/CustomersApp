@@ -3,6 +3,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments }
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
@@ -45,11 +46,13 @@ export default function RootLayout() {
   }
 
   return (
-    <SettingsProvider>
-      <AuthProvider>
-        <RootLayoutNav />
-      </AuthProvider>
-    </SettingsProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SettingsProvider>
+        <AuthProvider>
+          <RootLayoutNav />
+        </AuthProvider>
+      </SettingsProvider>
+    </GestureHandlerRootView>
   );
 }
 

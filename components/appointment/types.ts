@@ -108,7 +108,7 @@ export interface IAppointmentDetails {
     images?: IImage[];
     expenses?: IExpense[];
     invoices?: IInvoice[];
-    address?: { full: string };
+    address?: { full: string; lat?: number | string | null; lon?: number | string | null };
     customer?: { id: number; name: string; email: string; phone: string; jobsCount: number; addresses?: { full: string }[] };
     appointments?: { id: number; status: number; start: string; end: string; techs?: { id: number; name: string; color: string }[] }[];
     notes?: INote[];
