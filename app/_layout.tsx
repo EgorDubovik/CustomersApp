@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { SocketProvider } from '@/context/SocketContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { useAppStateActive } from '@/hooks/useAppStateActive';
 import { SettingsProvider, useSettings } from '@/context/SettingsContext';
@@ -49,7 +50,9 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SettingsProvider>
         <AuthProvider>
-          <RootLayoutNav />
+          <SocketProvider>
+            <RootLayoutNav />
+          </SocketProvider>
         </AuthProvider>
       </SettingsProvider>
     </GestureHandlerRootView>

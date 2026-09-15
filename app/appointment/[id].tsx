@@ -3,6 +3,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { API_URL } from '@/constants/Config';
 import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/context/SettingsContext';
+import { useSocket, useSocketEvent } from '@/context/SocketContext';
 import { useToast } from '@/context/ToastContext';
 import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -51,6 +52,7 @@ export default function AppointmentDetailsScreen() {
   const { showToast } = useToast();
   const colorScheme = useColorScheme();
   const { navigationMap } = useSettings();
+  const { reconnectCount } = useSocket();
   const isDark = colorScheme === 'dark';
   const c = isDark ? palette.dark : palette.light;
 
@@ -105,7 +107,8 @@ export default function AppointmentDetailsScreen() {
   const maxPull = screenHeight / 2;
   const mapHeight = heroHeight + maxPull;
   const scrollY = useSharedValue(0);
-  const pullY = useSharedValue(0);
+  const pullY = useSharedValue(0); // 0 = closed, maxPull = map fully open
+  const pullStart = useSharedValue(0); // pullY at the moment the gesture started
   const touchStart = useSharedValue({ x: 0, y: 0 });
 
   const onVerticalScroll = useAnimatedScrollHandler((e) => {
@@ -130,20 +133,41 @@ export default function AppointmentDetailsScreen() {
             state.fail();
             return;
           }
-          // Upward, or not at the top → the ScrollView owns it
+          const isOpen = pullY.value > 1;
+          if (isOpen) {
+            // While the map is open every vertical drag belongs to us (drag up closes it)
+            if (Math.abs(dy) > 8) state.activate();
+            return;
+          }
+          // Closed: upward, or not at the top → the ScrollView owns it
           if (dy < -4 || (dy > 8 && scrollY.value > 0)) {
             state.fail();
             return;
           }
           if (dy > 8 && scrollY.value <= 0) state.activate();
         })
-        .onUpdate((e) => {
-          const t = Math.max(0, e.translationY);
-          // Progressive resistance that asymptotically approaches maxPull
-          pullY.value = t / (1 + t / maxPull);
+        .onStart(() => {
+          pullStart.value = pullY.value;
         })
-        .onFinalize(() => {
-          pullY.value = withSpring(0, { damping: 18, stiffness: 170, mass: 0.6 });
+        .onUpdate((e) => {
+          const raw = pullStart.value + e.translationY;
+          if (raw <= 0) pullY.value = 0;
+          else if (raw <= maxPull) pullY.value = raw;
+          else pullY.value = maxPull + (raw - maxPull) * 0.25; // rubber-band past the open position
+        })
+        .onEnd((e) => {
+          // Fling decides first; otherwise snap to whichever position is closer (opening is
+          // made a little easier than closing so a modest pull is enough to reveal the map)
+          let open: boolean;
+          if (e.velocityY > 600) open = true;
+          else if (e.velocityY < -600) open = false;
+          else open = pullY.value > maxPull * (pullStart.value > 1 ? 0.5 : 0.35);
+          pullY.value = withSpring(open ? maxPull : 0, { damping: 20, stiffness: 180, mass: 0.7, overshootClamping: true });
+        })
+        .onFinalize((_, success) => {
+          if (!success) {
+            pullY.value = withSpring(pullY.value > maxPull / 2 ? maxPull : 0, { damping: 20, stiffness: 180, mass: 0.7, overshootClamping: true });
+          }
         }),
     [maxPull],
   );
@@ -151,14 +175,19 @@ export default function AppointmentDetailsScreen() {
   const pulledContentStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: pullY.value }],
   }));
+  // The whole fixed background scrolls away with the content, otherwise its gradient would
+  // show through the transparent bottom padding once the user scrolls to the end.
+  const fixedBgStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -scrollY.value }],
+  }));
   const mapLayerStyle = useAnimatedStyle(() => {
     const base = -(mapHeight - heroHeight) / 2; // centre the tall image on the hero
-    // Follow the hero while scrolling; open up at half speed while pulling
-    return { transform: [{ translateY: base - scrollY.value + pullY.value / 2 }] };
+    // Open up at half speed while pulling (scrolling is handled by fixedBgStyle)
+    return { transform: [{ translateY: base + pullY.value / 2 }] };
   });
   // The scrim thins out as the map opens so the revealed area reads as a map, not a dimmed banner
   const heroScrimStyle = useAnimatedStyle(() => ({
-    opacity: 1 - (pullY.value / maxPull) * 0.7,
+    opacity: 1 - Math.min(1, pullY.value / maxPull) * 0.5,
   }));
 
   const switchTab = (key: AppointmentTabKey) => {
@@ -223,6 +252,24 @@ export default function AppointmentDetailsScreen() {
     });
     return unsubscribe;
   }, [navigation, id, token]);
+
+  // ─── Real-time updates ─────────────────────────────────────────────────────
+  // The socket payload is the schedule-shaped appointment, not the details shape this
+  // screen renders, so on a match we just silently refetch. Our own edits echo back too
+  // (the server no longer excludes the sender) — harmless, the refetch is idempotent.
+  useSocketEvent<{ id: number }>('appointment.updated', (data) => {
+    if (data?.id === Number(id) && token) fetchDetails(true);
+  });
+
+  useSocketEvent<{ appointmentId: number }>('appointment.deleted', (data) => {
+    if (data?.appointmentId !== Number(id)) return;
+    Alert.alert('Appointment removed', 'This appointment was deleted.', [{ text: 'OK', onPress: () => router.back() }]);
+  });
+
+  // Anything that happened while the socket was down is lost — reload after a reconnect
+  useEffect(() => {
+    if (reconnectCount > 0 && id && token) fetchDetails(true);
+  }, [reconnectCount]);
 
   // Timer accumulation & ticking effect
   useEffect(() => {
@@ -515,7 +562,7 @@ export default function AppointmentDetailsScreen() {
 
       {/* ═══ FIXED MAP LAYER (behind the ScrollView) ═══════════════════════════ */}
       {/* Gradient fills the whole area as the fallback; the map image is centred on the hero */}
-      <View pointerEvents="none" style={[styles.heroFixedBg, { height: mapHeight + screenHeight / 2 }]}>
+      <Animated.View pointerEvents="none" style={[styles.heroFixedBg, { height: mapHeight + screenHeight / 2 }, fixedBgStyle]}>
         <LinearGradient colors={currentStatus.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroLayer} />
         {heroMapUrl && (
           <Animated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0, height: mapHeight }, mapLayerStyle]}>
@@ -528,14 +575,14 @@ export default function AppointmentDetailsScreen() {
             />
           </Animated.View>
         )}
-      </View>
+      </Animated.View>
 
       <GestureDetector gesture={pullGesture}>
         <Animated.View style={[{ flex: 1 }, pulledContentStyle]}>
           <Animated.ScrollView
             scrollEnabled={scrollEnabled}
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: 40 }}
+            contentContainerStyle={{ flexGrow: 1 }}
             showsVerticalScrollIndicator={false}
             stickyHeaderIndices={[1]}
             onScroll={onVerticalScroll}
@@ -552,8 +599,8 @@ export default function AppointmentDetailsScreen() {
                   {heroMapUrl && heroMapLoaded && (
                     <Animated.View style={[styles.heroLayer, heroScrimStyle]}>
                       <LinearGradient
-                        colors={['rgba(2,6,23,0.20)', 'rgba(2,6,23,0.45)', 'rgba(2,6,23,0.80)']}
-                        locations={[0, 0.45, 1]}
+                        colors={['rgba(2,6,23,0)', 'rgba(2,6,23,0.35)', 'rgba(2,6,23,0.85)']}
+                        locations={[0, 0.5, 1]}
                         style={styles.heroLayer}
                       />
                     </Animated.View>
@@ -864,6 +911,9 @@ export default function AppointmentDetailsScreen() {
                 </View>
               </View>
             </ScrollView>
+
+            {/* Opaque filler: covers the fixed gradient layer below short pages and at the very end of long ones */}
+            <View style={{ flexGrow: 1, minHeight: 40, backgroundColor: c.bg }} />
           </Animated.ScrollView>
         </Animated.View>
       </GestureDetector>

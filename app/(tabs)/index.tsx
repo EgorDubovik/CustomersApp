@@ -14,6 +14,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Tabs, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useAuth } from '@/context/AuthContext';
+import { useSocket, useSocketEvent } from '@/context/SocketContext';
 import { API_URL } from '@/constants/Config';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -114,8 +115,12 @@ const END_HOURS_OPTIONS = Array.from({ length: 12 }, (_, i) => {
 
 // ─── Main Screen Component ───────────────────────────────────────────────────
 
+const ROLE_ADMIN = 1;
+const ROLE_DISPATCHER = 3;
+
 export default function TabOneScreen() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const { reconnectCount } = useSocket();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -220,6 +225,38 @@ export default function TabOneScreen() {
       fetchAppointments();
     }
   }, [token]);
+
+  // Events emitted while the socket was down (background, no network) are gone for good,
+  // so every reconnect is followed by a silent full reload of the schedule.
+  useEffect(() => {
+    if (reconnectCount > 0 && token) fetchAppointments(true);
+  }, [reconnectCount]);
+
+  // ─── Real-time updates ─────────────────────────────────────────────────────
+  // The payload mirrors one item of GET /appointments (customer & address hoisted to the
+  // top level), so it can be dropped straight into the list.
+  const isStaff = !!user?.roles_ids?.some((r) => r === ROLE_ADMIN || r === ROLE_DISPATCHER);
+
+  useSocketEvent<IAppointment & { techs?: ITech[] }>('appointment.updated', (incoming) => {
+    if (!incoming?.id) return;
+    // A technician only sees appointments they're assigned to: if they were just taken off
+    // this one, drop it instead of upserting it.
+    const assignedToMe = !!incoming.techs?.some((t) => t.id === user?.id);
+    setAppointments((prev) => {
+      const idx = prev.findIndex((a) => a.id === incoming.id);
+      if (!isStaff && !assignedToMe) {
+        return idx === -1 ? prev : prev.filter((a) => a.id !== incoming.id);
+      }
+      if (idx === -1) return [incoming, ...prev];
+      const next = prev.slice();
+      next[idx] = { ...prev[idx], ...incoming };
+      return next;
+    });
+  });
+
+  useSocketEvent<{ appointmentId: number }>('appointment.deleted', ({ appointmentId }) => {
+    setAppointments((prev) => prev.filter((a) => a.id !== appointmentId));
+  });
 
   const mappedEvents = appointments.map((app) => ({
     id: app.id,
