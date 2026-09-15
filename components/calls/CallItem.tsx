@@ -117,46 +117,63 @@ export default function CallItem({ call, isDark, onCommentsChange, onShowTranscr
   };
 
   return (
-    <View style={[styles.bubbleRow, { justifyContent: isOutgoing ? 'flex-end' : 'flex-start' }]}>
-      <View style={{ maxWidth: '88%', minWidth: 240 }}>
-        {/* ─── Bubble ─── */}
-        <View style={[styles.bubble, isOutgoing ? styles.bubbleOut : styles.bubbleIn, { backgroundColor: bubbleBg, maxWidth: '100%', gap: 8 }]}>
-          {isMissed && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <SymbolView name={{ ios: 'phone.down.fill', android: 'phone_missed', web: 'phone_missed' }} size={18} tintColor={isOutgoing ? '#FECACA' : c.danger} />
-              <Text style={{ fontSize: 14, fontWeight: '700', color: isOutgoing ? '#FECACA' : c.danger }}>{isVoicemail ? 'Missed call · voicemail' : 'Missed call'}</Text>
+    // Column: bubble row on top, comments panel (full width) below. While the panel is
+    // open the whole block gets a tinted frame so it's obvious which call is being commented.
+    <View style={[styles.callBlock, showComments && { backgroundColor: c.primaryMuted, borderColor: c.primary, padding: 8, marginHorizontal: -4 }]}>
+      <View style={{ flexDirection: 'row', justifyContent: isOutgoing ? 'flex-end' : 'flex-start' }}>
+        <View style={{ maxWidth: '92%', minWidth: 240 }}>
+          {/* ─── Bubble + comments toggle beside it (right of incoming, left of outgoing) ─── */}
+          <View style={{ flexDirection: isOutgoing ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
+            <View style={[styles.bubble, isOutgoing ? styles.bubbleOut : styles.bubbleIn, { backgroundColor: bubbleBg, flex: 1, maxWidth: '100%', gap: 8 }]}>
+              {isMissed && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <SymbolView name={{ ios: 'phone.down.fill', android: 'phone_missed', web: 'phone_missed' }} size={18} tintColor={isOutgoing ? '#FECACA' : c.danger} />
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: isOutgoing ? '#FECACA' : c.danger }}>{isVoicemail ? 'Missed call · voicemail' : 'Missed call'}</Text>
+                </View>
+              )}
+
+              {(isRinging || isOngoing) && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: isOngoing ? c.success : bubbleMuted }} />
+                  <Text style={{ flex: 1, fontSize: 13, fontStyle: 'italic', color: bubbleMuted }}>
+                    {isOngoing ? 'Call in progress' : isOutgoing ? 'Outgoing call…' : 'Incoming call…'}
+                  </Text>
+                  {isOngoing && <Text style={{ fontSize: 12, fontWeight: '700', color: bubbleText, fontVariant: ['tabular-nums'] }}>{formatClock(elapsed)}</Text>}
+                </View>
+              )}
+
+              {(isCompleted || isVoicemail) &&
+                (hasRecord ? (
+                  <AudioPlayer url={audioUrl} durationHint={audioDuration} tint={bubbleText} trackColor={trackColor} textColor={bubbleMuted} />
+                ) : isWaitingForRecording ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator size="small" color={bubbleMuted} />
+                    <Text style={{ fontSize: 12, fontStyle: 'italic', color: bubbleMuted }}>Recording processing…</Text>
+                  </View>
+                ) : (
+                  <Text style={{ fontSize: 12, fontStyle: 'italic', color: bubbleMuted }}>
+                    No record{callDuration ? `. Call duration: ${callDuration}` : ''}
+                  </Text>
+                ))}
             </View>
-          )}
 
-          {(isRinging || isOngoing) && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: isOngoing ? c.success : bubbleMuted }} />
-              <Text style={{ flex: 1, fontSize: 13, fontStyle: 'italic', color: bubbleMuted }}>
-                {isOngoing ? 'Call in progress' : isOutgoing ? 'Outgoing call…' : 'Incoming call…'}
-              </Text>
-              {isOngoing && <Text style={{ fontSize: 12, fontWeight: '700', color: bubbleText, fontVariant: ['tabular-nums'] }}>{formatClock(elapsed)}</Text>}
-            </View>
-          )}
+            <Pressable
+              onPress={() => {
+                setShowComments((v) => !v);
+                setShowSummary(false);
+              }}
+              hitSlop={8}
+              style={({ pressed }) => [styles.commentToggle, pressed && { opacity: 0.6 }]}
+            >
+              <SymbolView name={{ ios: 'bubble.left.and.bubble.right', android: 'forum', web: 'forum' }} size={20} tintColor={showComments ? c.primary : c.textMuted} />
+              {/* Amber dot = there are comments, same cue as the web */}
+              {(call.comments?.length ?? 0) > 0 && <View style={[styles.commentDot, { backgroundColor: c.warning, borderColor: c.bg }]} />}
+            </Pressable>
+          </View>
 
-          {(isCompleted || isVoicemail) &&
-            (hasRecord ? (
-              <AudioPlayer url={audioUrl} durationHint={audioDuration} tint={bubbleText} trackColor={trackColor} textColor={bubbleMuted} />
-            ) : isWaitingForRecording ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <ActivityIndicator size="small" color={bubbleMuted} />
-                <Text style={{ fontSize: 12, fontStyle: 'italic', color: bubbleMuted }}>Recording processing…</Text>
-              </View>
-            ) : (
-              <Text style={{ fontSize: 12, fontStyle: 'italic', color: bubbleMuted }}>
-                No record{callDuration ? `. Call duration: ${callDuration}` : ''}
-              </Text>
-            ))}
-        </View>
-
-        {/* ─── Meta row: time · summary · comments ─── */}
-        <View style={styles.bubbleMeta}>
-          <Text style={[styles.metaText, { color: c.textFaint }]}>at {formatDate(call.created_at, 'hh:mm A')}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {/* ─── Meta row: time · summary ─── */}
+          <View style={[styles.bubbleMeta, { flexDirection: isOutgoing ? 'row-reverse' : 'row', paddingRight: isOutgoing ? 0 : 36, paddingLeft: isOutgoing ? 36 : 0 }]}>
+            <Text style={[styles.metaText, { color: c.textFaint }]}>at {formatDate(call.created_at, 'hh:mm A')}</Text>
             {!!call.ai_details?.summary && (
               <Pressable
                 onPress={() => {
@@ -165,77 +182,66 @@ export default function CallItem({ call, isDark, onCommentsChange, onShowTranscr
                 }}
                 hitSlop={6}
               >
-                <Text style={[styles.metaLink, { color: showSummary ? c.primary : c.textMuted }]}>Summary</Text>
+                <Text style={[styles.metaLink, { color: showSummary ? c.primary : c.textMuted }]}>Call summary</Text>
               </Pressable>
             )}
-            <Pressable
-              onPress={() => {
-                setShowComments((v) => !v);
-                setShowSummary(false);
-              }}
-              hitSlop={6}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-            >
-              <SymbolView name={{ ios: 'bubble.left.and.bubble.right', android: 'forum', web: 'forum' }} size={13} tintColor={showComments ? c.primary : c.textMuted} />
-              <Text style={[styles.metaLink, { color: showComments ? c.primary : c.textMuted }]}>{call.comments?.length ? call.comments.length : 'Comment'}</Text>
+          </View>
+
+          {/* ─── AI summary ─── */}
+          {showSummary && !!call.ai_details?.summary && (
+            <View style={[styles.summaryBox, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+              {call.ai_details.summary.split('|').map((item, i) => (
+                <View key={i} style={{ flexDirection: 'row', gap: 6 }}>
+                  <Text style={{ fontSize: 12, color: c.textMuted }}>•</Text>
+                  <Text style={{ flex: 1, fontSize: 12, lineHeight: 17, fontWeight: '500', color: c.text }}>{item.trim()}</Text>
+                </View>
+              ))}
+              <Pressable onPress={() => onShowTranscription(call.id)} hitSlop={6} style={{ alignSelf: 'flex-end', marginTop: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: c.primary }}>Show all transcription</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* ─── Comments panel — full width below the bubble ─── */}
+      {showComments && (
+        <View style={[styles.summaryBox, { backgroundColor: c.card, borderColor: c.cardBorder, marginTop: 4 }]}>
+          {(call.comments || []).length === 0 && <Text style={{ fontSize: 12, fontStyle: 'italic', color: c.textMuted }}>No comments yet.</Text>}
+          {(call.comments || []).map((cm) => (
+            <View key={cm.id} style={[styles.commentItem, { backgroundColor: c.noteBg }]}>
+              <View style={[styles.commentAvatar, { backgroundColor: cm.user?.color || c.primary }]}>
+                <Text style={{ fontSize: 9, fontWeight: '800', color: '#fff' }}>{getInitials(cm.user?.name || 'U')}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, color: c.textMuted }}>
+                  <Text style={{ fontWeight: '700', color: c.textSecondary }}>{cm.user?.name}</Text>
+                  {'  '}{formatDate(cm.created_at, 'MMM DD, h:mm A')}
+                </Text>
+                <Text style={{ fontSize: 13, color: c.text, marginTop: 2 }}>{cm.comment}</Text>
+              </View>
+              {canDeleteComment(cm) && (
+                <Pressable onPress={() => deleteComment(cm)} hitSlop={8} disabled={deletingId === cm.id}>
+                  {deletingId === cm.id ? <ActivityIndicator size="small" color={c.danger} /> : <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} size={14} tintColor={c.danger} />}
+                </Pressable>
+              )}
+            </View>
+          ))}
+          <View style={styles.commentInputRow}>
+            <TextInput
+              value={comment}
+              onChangeText={setComment}
+              placeholder="Type comment here…"
+              placeholderTextColor={c.textFaint}
+              multiline
+              style={[styles.commentInput, { backgroundColor: c.inputBg, borderColor: c.cardBorder, color: c.text }]}
+            />
+            <Pressable onPress={sendComment} disabled={sending || !comment.trim()} style={({ pressed }) => [styles.commentSendBtn, { backgroundColor: comment.trim() ? c.primary : c.inputBg }, pressed && { opacity: 0.8 }]}>
+              {sending ? <ActivityIndicator size="small" color="#fff" /> : <SymbolView name={{ ios: 'paperplane.fill', android: 'send', web: 'send' }} size={14} tintColor={comment.trim() ? '#fff' : c.textMuted} />}
             </Pressable>
           </View>
         </View>
-
-        {/* ─── AI summary ─── */}
-        {showSummary && !!call.ai_details?.summary && (
-          <View style={[styles.summaryBox, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
-            {call.ai_details.summary.split('|').map((item, i) => (
-              <View key={i} style={{ flexDirection: 'row', gap: 6 }}>
-                <Text style={{ fontSize: 12, color: c.textMuted }}>•</Text>
-                <Text style={{ flex: 1, fontSize: 12, lineHeight: 17, fontWeight: '500', color: c.text }}>{item.trim()}</Text>
-              </View>
-            ))}
-            <Pressable onPress={() => onShowTranscription(call.id)} hitSlop={6} style={{ alignSelf: 'flex-end', marginTop: 4 }}>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: c.primary }}>Show all transcription</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* ─── Comments ─── */}
-        {showComments && (
-          <View style={[styles.summaryBox, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
-            {(call.comments || []).length === 0 && <Text style={{ fontSize: 12, fontStyle: 'italic', color: c.textMuted }}>No comments yet.</Text>}
-            {(call.comments || []).map((cm) => (
-              <View key={cm.id} style={[styles.commentItem, { backgroundColor: c.noteBg }]}>
-                <View style={[styles.commentAvatar, { backgroundColor: cm.user?.color || c.primary }]}>
-                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#fff' }}>{getInitials(cm.user?.name || 'U')}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 11, color: c.textMuted }}>
-                    <Text style={{ fontWeight: '700', color: c.textSecondary }}>{cm.user?.name}</Text>
-                    {'  '}{formatDate(cm.created_at, 'MMM DD, h:mm A')}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: c.text, marginTop: 2 }}>{cm.comment}</Text>
-                </View>
-                {canDeleteComment(cm) && (
-                  <Pressable onPress={() => deleteComment(cm)} hitSlop={8} disabled={deletingId === cm.id}>
-                    {deletingId === cm.id ? <ActivityIndicator size="small" color={c.danger} /> : <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} size={14} tintColor={c.danger} />}
-                  </Pressable>
-                )}
-              </View>
-            ))}
-            <View style={styles.commentInputRow}>
-              <TextInput
-                value={comment}
-                onChangeText={setComment}
-                placeholder="Type comment here…"
-                placeholderTextColor={c.textFaint}
-                multiline
-                style={[styles.commentInput, { backgroundColor: c.inputBg, borderColor: c.cardBorder, color: c.text }]}
-              />
-              <Pressable onPress={sendComment} disabled={sending || !comment.trim()} style={({ pressed }) => [styles.commentSendBtn, { backgroundColor: comment.trim() ? c.primary : c.inputBg }, pressed && { opacity: 0.8 }]}>
-                {sending ? <ActivityIndicator size="small" color="#fff" /> : <SymbolView name={{ ios: 'paperplane.fill', android: 'send', web: 'send' }} size={14} tintColor={comment.trim() ? '#fff' : c.textMuted} />}
-              </Pressable>
-            </View>
-          </View>
-        )}
-      </View>
+      )}
     </View>
   );
 }

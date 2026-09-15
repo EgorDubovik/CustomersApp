@@ -10,7 +10,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { API_URL } from '@/constants/Config';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -21,10 +21,12 @@ export default function CreateCustomerScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const themeStyles = isDark ? darkStyles : lightStyles;
+  // Pre-filled when coming from a conversation with an unknown caller
+  const { phone: presetPhone } = useLocalSearchParams<{ phone?: string }>();
 
   const [dataForm, setDataForm] = useState({
     name: '',
-    phone: '',
+    phone: presetPhone ? String(presetPhone).replace(/\D/g, '').replace(/^1(\d{10})$/, '$1') : '',
     email: '',
     line1: '',
     line2: '',

@@ -147,6 +147,12 @@ export const callsStyles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 12,
   },
+  callBlock: {
+    marginBottom: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
   bubble: {
     maxWidth: '85%',
     minWidth: 220,
@@ -179,6 +185,21 @@ export const callsStyles = StyleSheet.create({
   metaLink: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  commentToggle: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commentDot: {
+    position: 'absolute',
+    top: 2,
+    right: 1,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    borderWidth: 1.5,
   },
   playerRow: {
     flexDirection: 'row',
@@ -260,5 +281,68 @@ export const callsStyles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     marginBottom: 12,
+  },
+
+  // ─── SMS composer ─────────────────────────────────────────────────
+  composerWrap: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    gap: 6,
+  },
+  composerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  composerIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  composerField: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    minHeight: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingLeft: 14,
+    paddingRight: 6,
+    paddingVertical: 4,
+  },
+  composerInput: {
+    flex: 1,
+    fontSize: 15,
+    lineHeight: 20,
+    maxHeight: 120,
+    paddingTop: 6,
+    paddingBottom: 6,
+  },
+  composerAiBtn: {
+    marginBottom: 2,
+    marginLeft: 6,
+  },
+  composerAiGradient: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  composerSendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

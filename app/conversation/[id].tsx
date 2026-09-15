@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Linking, Pressable, Text, View } from 'react-native';
+import { ActionSheetIOS, ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { setAudioModeAsync } from 'expo-audio';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -13,6 +13,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { formatDate } from '@/components/scheduler/utils/TimeHelper';
 import CallItem from '@/components/calls/CallItem';
 import NoteItem from '@/components/calls/NoteItem';
+import SmsComposer from '@/components/calls/SmsComposer';
 import SmsItem from '@/components/calls/SmsItem';
 import TranscriptionModal from '@/components/calls/TranscriptionModal';
 import { callsPalette, callsStyles as styles } from '@/components/calls/styles';
@@ -165,7 +166,31 @@ export default function ConversationScreen() {
   const customerPhone = getCustomerPhone(conversation);
   const companyPhone = getCompanyPhone(conversation);
   const matched = getMatchedCompanyPhone(companyPhone, companyPhones);
-  const title = conversation?.customer?.name || formatPhoneNumber(customerPhone) || 'Conversation';
+  const customer = conversation?.customer ?? null;
+  const title = customer?.name || formatPhoneNumber(customerPhone) || 'Conversation';
+
+  const copyPhone = () => {
+    if (!customerPhone) return;
+    Clipboard.setStringAsync(customerPhone);
+    showToast({ message: 'Phone number copied', type: 'success' });
+  };
+  const openCustomer = () => customer && router.push(`/customer/${customer.id}` as any);
+  const createCustomer = () => router.push({ pathname: '/customer/create', params: { phone: customerPhone } } as any);
+
+  // Long-press menu on the title: "View customer" / "Create customer" + "Copy phone number"
+  const openTitleMenu = () => {
+    if (!conversation) return;
+    const primary = customer ? { label: 'View customer', action: openCustomer } : { label: 'Create customer', action: createCustomer };
+    const options = [primary, { label: 'Copy phone number', action: copyPhone }];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { title: formatPhoneNumber(customerPhone) || undefined, options: [...options.map((o) => o.label), 'Cancel'], cancelButtonIndex: options.length },
+        (i) => options[i]?.action(),
+      );
+    } else {
+      Alert.alert(formatPhoneNumber(customerPhone) || 'Caller', undefined, [...options.map((o) => ({ text: o.label, onPress: o.action })), { text: 'Cancel', style: 'cancel' as const }]);
+    }
+  };
 
   const renderItem = ({ item, index }: { item: TimelineItem; index: number }) => {
     const older = timeline[index + 1];
@@ -187,7 +212,7 @@ export default function ConversationScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: c.bg }}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* ─── Header ─── */}
@@ -196,50 +221,43 @@ export default function ConversationScreen() {
           <Pressable onPress={() => router.back()} hitSlop={10} style={({ pressed }) => [styles.headerBackBtn, { backgroundColor: c.inputBg }, pressed && { opacity: 0.7 }]}>
             <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={16} tintColor={c.text} />
           </Pressable>
+          {/* Tap: open the customer (when known). Long-press: context menu. Unknown caller: tap opens the menu too. */}
           <Pressable
-            onPress={() => conversation?.customer && router.push(`/customer/${conversation.customer.id}` as any)}
-            disabled={!conversation?.customer}
-            style={{ flex: 1 }}
+            onPress={customer ? openCustomer : openTitleMenu}
+            onLongPress={openTitleMenu}
+            delayLongPress={350}
+            disabled={!conversation}
+            style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.6 }]}
           >
-            <Text style={{ fontSize: 18, fontWeight: '800', color: conversation?.customer ? c.primary : c.text }} numberOfLines={1}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: customer ? c.primary : c.text }} numberOfLines={1}>
               {loading ? 'Loading…' : title}
             </Text>
             {!!conversation && (
-              <Text style={{ fontSize: 12, color: c.textMuted }}>
+              <Text style={{ fontSize: 12, color: c.textMuted }} numberOfLines={1}>
+                {customer && customerPhone ? `${formatPhoneNumber(customerPhone)}  ·  ` : ''}
                 {conversation.calls_count} {conversation.calls_count === 1 ? 'call' : 'calls'}
-                {conversation.customer ? '  ·  View customer ›' : ''}
               </Text>
             )}
           </Pressable>
         </View>
 
-        {!!conversation && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {!!customerPhone && (
-              <View style={[styles.headerChip, { backgroundColor: c.bg, borderColor: c.cardBorder }]}>
-                <Pressable onPress={() => Linking.openURL(`tel:${customerPhone}`)} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <SymbolView name={{ ios: 'phone.fill', android: 'call', web: 'call' }} size={12} tintColor={c.primary} />
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: c.text }}>{formatPhoneNumber(customerPhone)}</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    Clipboard.setStringAsync(customerPhone);
-                    showToast({ message: 'Phone number copied', type: 'success' });
-                  }}
-                  hitSlop={6}
-                >
-                  <SymbolView name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }} size={12} tintColor={c.textMuted} />
-                </Pressable>
-              </View>
-            )}
-            {!!companyPhone && (
-              <View style={[styles.headerChip, { backgroundColor: c.bg, borderColor: c.cardBorder }]}>
-                <Text style={{ fontSize: 11, color: c.textFaint }}>via</Text>
-                <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: matched?.color || '#888' }} />
-                <Text style={{ fontSize: 12, fontWeight: '700', color: matched?.color || c.textSecondary }} numberOfLines={1}>{matched?.description || 'Our number'}</Text>
-                <Text style={{ fontSize: 12, color: c.textMuted }}>{formatPhoneNumber(companyPhone)}</Text>
-              </View>
-            )}
+        {!!conversation && !!companyPhone && (
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+            {/* Our number the customer reached — tap copies it */}
+            <Pressable
+              onPress={() => {
+                Clipboard.setStringAsync(companyPhone);
+                showToast({ message: 'Company number copied', type: 'success' });
+              }}
+              hitSlop={6}
+              style={({ pressed }) => [styles.headerChip, { backgroundColor: c.bg, borderColor: c.cardBorder }, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={{ fontSize: 11, color: c.textFaint }}>via</Text>
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: matched?.color || '#888' }} />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: matched?.color || c.textSecondary }} numberOfLines={1}>{matched?.description || 'Our number'}</Text>
+              <Text style={{ fontSize: 12, color: c.textMuted }}>{formatPhoneNumber(companyPhone)}</Text>
+              <SymbolView name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }} size={11} tintColor={c.textFaint} />
+            </Pressable>
           </View>
         )}
       </View>
@@ -263,7 +281,9 @@ export default function ConversationScreen() {
           inverted
           keyExtractor={(item) => `${item.type}-${item.data.id}`}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8 }}
+          // In an inverted list a short timeline hugs the bottom; flexGrow + flex-end pushes it
+          // to the top of the screen while keeping the chronological order untouched.
+          contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8, flexGrow: 1, justifyContent: 'flex-end' }}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           onEndReached={loadOlder}
@@ -288,7 +308,9 @@ export default function ConversationScreen() {
         />
       )}
 
+      {!loading && !error && <SmsComposer isDark={isDark} recipientLabel={customer?.name || formatPhoneNumber(customerPhone) || undefined} />}
+
       <TranscriptionModal visible={!!transcriptionCallId} onClose={() => setTranscriptionCallId(null)} callId={transcriptionCallId} token={token} isDark={isDark} />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
