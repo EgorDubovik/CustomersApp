@@ -5,9 +5,17 @@ import { Platform, Pressable } from 'react-native';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+import { useAuth } from '@/context/AuthContext';
+import { useSocketEvent } from '@/context/SocketContext';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { isStaff, callsUnread, setCallsUnread } = useAuth();
+
+  // Backend pushes the company-wide total whenever something is read or arrives
+  useSocketEvent<{ total: number }>('conversation.unread', ({ total }) => {
+    if (typeof total === 'number') setCallsUnread(total);
+  });
   const activeColor = Colors[colorScheme].tint;
   const inactiveColor = Colors[colorScheme].tabIconDefault;
   const cardBg = Colors[colorScheme].card;
@@ -96,6 +104,27 @@ export default function TabLayout() {
                 )}
               </Pressable>
             </Link>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="calls"
+        options={{
+          title: 'Calls',
+          // Technicians don't handle the phone line — hide the tab (and its route) for them
+          href: isStaff ? undefined : null,
+          headerShown: false,
+          tabBarBadge: callsUnread > 0 ? (callsUnread > 99 ? '99+' : callsUnread) : undefined,
+          tabBarIcon: ({ color, focused }) => (
+            <SymbolView
+              name={{
+                ios: focused ? 'phone.fill' : 'phone',
+                android: 'call',
+                web: 'call',
+              }}
+              tintColor={color}
+              size={24}
+            />
           ),
         }}
       />

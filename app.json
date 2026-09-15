@@ -42,7 +42,8 @@
           "photosPermission": "Allow ApexFlow to access your photos to attach job pictures.",
           "cameraPermission": "Allow ApexFlow to use the camera to take job pictures."
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

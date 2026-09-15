@@ -32,6 +32,14 @@ export interface CompanyEmployee {
   roles_ids?: number[];
 }
 
+export interface CompanyPhone {
+  id: number;
+  phone: string;
+  description?: string;
+  color?: string;
+  is_primary?: boolean;
+}
+
 interface AuthContextType {
   token: string | null;
   user: User | null;
@@ -39,6 +47,12 @@ interface AuthContextType {
   companySettings: CompanySettings | null;
   companyServices: CompanyService[];
   companyEmployees: CompanyEmployee[];
+  companyPhones: CompanyPhone[];
+  /** Admin or dispatcher — everything a technician-only account can't see (Calls tab, …) */
+  isStaff: boolean;
+  /** Company-wide unread calls + texts; seeded by initial-data, kept fresh by the socket */
+  callsUnread: number;
+  setCallsUnread: (n: number) => void;
   login: (token: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
   fetchInitialData: (token: string) => Promise<void>;
@@ -53,6 +67,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [companyServices, setCompanyServices] = useState<CompanyService[]>([]);
   const [companyEmployees, setCompanyEmployees] = useState<CompanyEmployee[]>([]);
+  const [companyPhones, setCompanyPhones] = useState<CompanyPhone[]>([]);
+  const [callsUnread, setCallsUnread] = useState(0);
 
   const fetchInitialData = async (activeToken: string) => {
     try {
@@ -88,6 +104,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setCompanyEmployees(employees);
           await storage.setItem('company_employees', JSON.stringify(employees));
         }
+        if (typeof data.callsUnread === 'number') setCallsUnread(data.callsUnread);
+        if (Array.isArray(data.companyPhoneNumbers)) {
+          const phones: CompanyPhone[] = data.companyPhoneNumbers.map((p: any) => ({
+            id: p.id,
+            phone: p.phone,
+            description: p.description,
+            color: p.color,
+            is_primary: p.is_primary,
+          }));
+          setCompanyPhones(phones);
+          await storage.setItem('company_phones', JSON.stringify(phones));
+        }
       }
     } catch (e) {
       console.error('Failed to fetch initial data', e);
@@ -102,6 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const storedSettings = await storage.getItem('company_settings');
         const storedServices = await storage.getItem('company_services');
         const storedEmployees = await storage.getItem('company_employees');
+        const storedPhones = await storage.getItem('company_phones');
         
         if (storedToken) {
           setToken(storedToken);
@@ -136,6 +165,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.error('Failed to parse stored company employees JSON', e);
           }
         }
+        if (storedPhones) {
+          try {
+            setCompanyPhones(JSON.parse(storedPhones));
+          } catch (e) {
+            console.error('Failed to parse stored company phones JSON', e);
+          }
+        }
       } catch (e) {
         console.error('Failed to load auth data from storage', e);
       } finally {
@@ -165,18 +201,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await storage.removeItem('company_settings');
       await storage.removeItem('company_services');
       await storage.removeItem('company_employees');
+      await storage.removeItem('company_phones');
       setToken(null);
       setUser(null);
       setCompanySettings(null);
       setCompanyServices([]);
       setCompanyEmployees([]);
+      setCompanyPhones([]);
+      setCallsUnread(0);
     } catch (e) {
       console.error('Failed to remove auth data on logout', e);
     }
   };
 
+  // Role ids: 1 admin, 2 technician, 3 dispatcher (nestjs/src/auth/enums/role.enum.ts)
+  const isStaff = !!user?.roles_ids?.some((r) => r === 1 || r === 3);
+
   return (
-    <AuthContext.Provider value={{ token, user, isLoading, companySettings, companyServices, companyEmployees, login, logout, fetchInitialData }}>
+    <AuthContext.Provider
+      value={{ token, user, isLoading, companySettings, companyServices, companyEmployees, companyPhones, isStaff, callsUnread, setCallsUnread, login, logout, fetchInitialData }}
+    >
       {children}
     </AuthContext.Provider>
   );
