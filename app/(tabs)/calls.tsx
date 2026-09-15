@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -7,12 +7,15 @@ import { API_URL } from '@/constants/Config';
 import { useAuth } from '@/context/AuthContext';
 import { useSocket, useSocketEvent } from '@/context/SocketContext';
 import { useColorScheme } from '@/components/useColorScheme';
+import CallsSettingsModal, { phoneKey } from '@/components/calls/CallsSettingsModal';
 import ConversationItem from '@/components/calls/ConversationItem';
+import * as storage from '@/utils/storage';
 import { callsPalette, callsStyles as styles } from '@/components/calls/styles';
 import { ICall, IConversation, ISmsMessage } from '@/components/calls/types';
-import { applyConversationRead, isCallUnread, isMessageUnread, mergeCallIntoConversation, mergeSmsIntoConversation, sortByActivity } from '@/components/calls/helpers';
+import { applyConversationRead, getBusinessNumberFromCall, isCallUnread, isMessageUnread, mergeCallIntoConversation, mergeSmsIntoConversation, sortByActivity } from '@/components/calls/helpers';
 
 const PER_PAGE = 20;
+const HIDDEN_PHONES_KEY = 'calls_hidden_company_phones';
 
 export default function CallsScreen() {
   const { token, companyPhones } = useAuth();
@@ -32,6 +35,39 @@ export default function CallsScreen() {
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const requestSeq = useRef(0);
+
+  // ─── Company number filter (persisted; stores the HIDDEN lines so new numbers show by default)
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [hiddenPhones, setHiddenPhones] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    storage
+      .getItem(HIDDEN_PHONES_KEY)
+      .then((raw) => {
+        if (raw) setHiddenPhones(new Set(JSON.parse(raw)));
+      })
+      .catch(() => {});
+  }, []);
+
+  const persistHidden = (next: Set<string>) => {
+    setHiddenPhones(next);
+    storage.setItem(HIDDEN_PHONES_KEY, JSON.stringify([...next])).catch(() => {});
+  };
+  const toggleHiddenPhone = (key: string) => {
+    const next = new Set(hiddenPhones);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    persistHidden(next);
+  };
+
+  const visibleConversations = useMemo(() => {
+    if (hiddenPhones.size === 0) return conversations;
+    return conversations.filter((conv) => {
+      const line = phoneKey(getBusinessNumberFromCall(conv.last_call) || conv.company_phone);
+      // Legacy conversations without a known line stay visible rather than vanish
+      return !line || !hiddenPhones.has(line);
+    });
+  }, [conversations, hiddenPhones]);
 
   const fetchPage = useCallback(
     async (pageToLoad: number, searchPhone: string, mode: 'initial' | 'refresh' | 'more') => {
@@ -152,7 +188,17 @@ export default function CallsScreen() {
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top }}>
       {/* Header + search */}
       <View style={styles.searchWrap}>
-        <Text style={{ fontSize: 26, fontWeight: '800', color: c.text, marginBottom: 10 }}>Calls</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <Text style={{ fontSize: 26, fontWeight: '800', color: c.text }}>Calls</Text>
+          <Pressable onPress={() => setSettingsVisible(true)} hitSlop={8} style={({ pressed }) => [styles.headerIconBtn, { backgroundColor: hiddenPhones.size ? c.primaryMuted : c.card }, pressed && { opacity: 0.6 }]}>
+            <SymbolView name={{ ios: 'line.3.horizontal.decrease.circle', android: 'filter_list', web: 'filter_list' }} size={20} tintColor={hiddenPhones.size ? c.primary : c.textMuted} />
+            {hiddenPhones.size > 0 && (
+              <View style={[styles.headerIconBadge, { backgroundColor: c.primary }]}>
+                <Text style={{ fontSize: 9, fontWeight: '800', color: '#fff' }}>{hiddenPhones.size}</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
         <View style={[styles.searchInputRow, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
           <SymbolView name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} size={16} tintColor={c.textMuted} />
           <TextInput
@@ -188,7 +234,7 @@ export default function CallsScreen() {
         </View>
       ) : (
         <FlatList
-          data={conversations}
+          data={visibleConversations}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <ConversationItem conv={item} companyPhones={companyPhones} isDark={isDark} onPress={() => router.push(`/conversation/${item.id}` as any)} />
@@ -201,12 +247,24 @@ export default function CallsScreen() {
           ListEmptyComponent={
             <View style={{ alignItems: 'center', paddingTop: 60, gap: 8 }}>
               <SymbolView name={{ ios: 'phone.badge.waveform', android: 'call', web: 'call' }} size={36} tintColor={c.textFaint} />
-              <Text style={{ color: c.textMuted, fontWeight: '600' }}>{appliedSearch ? 'No conversations match your search' : 'No calls yet'}</Text>
+              <Text style={{ color: c.textMuted, fontWeight: '600' }}>
+                {appliedSearch ? 'No conversations match your search' : hiddenPhones.size && conversations.length ? 'All conversations are hidden by the number filter' : 'No calls yet'}
+              </Text>
             </View>
           }
           ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 12 }} color={c.primary} /> : null}
         />
       )}
+
+      <CallsSettingsModal
+        visible={settingsVisible}
+        onClose={() => setSettingsVisible(false)}
+        companyPhones={companyPhones}
+        hiddenPhones={hiddenPhones}
+        onToggle={toggleHiddenPhone}
+        onShowAll={() => persistHidden(new Set())}
+        isDark={isDark}
+      />
     </View>
   );
 }
