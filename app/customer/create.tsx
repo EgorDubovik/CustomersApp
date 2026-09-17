@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,14 +9,21 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  KeyboardTypeOptions,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import Animated, { Easing, interpolateColor, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import { API_URL } from '@/constants/Config';
 import { useColorScheme } from '@/components/useColorScheme';
+import AiParseModal, { AiParsedFields, PulsingOrb } from '@/components/customer/AiParseModal';
+
+type FormKey = 'name' | 'phone' | 'email' | 'line1' | 'line2' | 'city' | 'state' | 'zip';
 
 export default function CreateCustomerScreen() {
   const { token } = useAuth();
+  const { showToast } = useToast();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -95,32 +102,64 @@ export default function CreateCustomerScreen() {
     setDataForm({ ...dataForm, [name]: value });
   };
 
+  // ─── AI helper ───
+  const [aiOpen, setAiOpen] = useState(false);
+  // Timestamp per field of the last AI fill — each row glows when its stamp changes
+  const [aiFilledAt, setAiFilledAt] = useState<Partial<Record<FormKey, number>>>({});
+  const fillTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => fillTimers.current.forEach(clearTimeout), []);
+
+  // Fields land one after another so it reads like the assistant typing them in
+  const applyAiFields = (fields: AiParsedFields) => {
+    setAiOpen(false);
+    fillTimers.current.forEach(clearTimeout);
+    fillTimers.current = [];
+    const entries = Object.entries(fields) as [FormKey, string][];
+    entries.forEach(([key, value], i) => {
+      fillTimers.current.push(
+        setTimeout(() => {
+          const clean = key === 'phone' ? value.replace(/\D/g, '').replace(/^1(\d{10})$/, '$1') : value.trim();
+          setDataForm((prev) => ({ ...prev, [key]: clean }));
+          setAiFilledAt((prev) => ({ ...prev, [key]: Date.now() }));
+          if (key === 'phone') setPhoneError(false);
+          if (key === 'line1') setAddressError(false);
+        }, 250 + i * 140),
+      );
+    });
+    fillTimers.current.push(setTimeout(() => showToast({ message: `AI filled ${entries.length} field${entries.length === 1 ? '' : 's'}`, type: 'success' }), 250 + entries.length * 140));
+  };
+
+  const inputProps = (key: FormKey) => ({
+    value: dataForm[key],
+    onChangeText: (text: string) => handleChange(key, text),
+    highlightAt: aiFilledAt[key],
+    isDark,
+  });
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, themeStyles.bg]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <Stack.Screen 
-        options={{ 
-          title: 'New Customer',
+      <Stack.Screen
+        options={{
+          title: 'Create Customer',
           headerTitleStyle: {
             fontWeight: '700',
           },
+          // Chevron only — the previous route's name ("(tabs)") is noise
+          headerBackButtonDisplayMode: 'minimal',
+          headerBackTitle: '',
           headerRight: () => (
-            <TouchableOpacity onPress={storeCustomer} disabled={loading} style={styles.headerSaveBtn}>
-              {loading ? (
-                <ActivityIndicator size="small" color={isDark ? '#818CF8' : '#6366F1'} />
-              ) : (
-                <Text style={[styles.headerSaveText, { color: isDark ? '#818CF8' : '#6366F1' }]}>
-                  Save
-                </Text>
-              )}
+            <TouchableOpacity onPress={() => setAiOpen(true)} style={styles.headerAiBtn} hitSlop={8} activeOpacity={0.7}>
+              <PulsingOrb size={30} iconSize={14} active={false} />
             </TouchableOpacity>
-          )
-        }} 
+          ),
+        }}
       />
-      <ScrollView 
+      <AiParseModal visible={aiOpen} onClose={() => setAiOpen(false)} onParsed={applyAiFields} isDark={isDark} />
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
@@ -132,130 +171,43 @@ export default function CreateCustomerScreen() {
         ) : null}
 
         <Text style={styles.sectionHeader}>Personal Info</Text>
-        
+
         <View style={[styles.groupContainer, themeStyles.cardBg, themeStyles.cardBorder]}>
-          {/* Name Row */}
-          <View style={styles.rowInput}>
-            <Text style={[styles.rowLabel, themeStyles.textTitle]}>Name</Text>
-            <TextInput
-              style={[styles.input, themeStyles.textTitle]}
-              placeholder="Required"
-              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
-              value={dataForm.name}
-              onChangeText={(text) => handleChange('name', text)}
-              autoCorrect={false}
-            />
-          </View>
-          
+          <FormRow label="Name" placeholder="Required" autoCorrect={false} {...inputProps('name')} />
+
           <View style={[styles.separator, themeStyles.separatorColor]} />
-          
-          {/* Phone Row */}
-          <View style={styles.rowInput}>
-            <Text style={[styles.rowLabel, themeStyles.textTitle, phoneError && styles.labelError]}>Phone</Text>
-            <TextInput
-              style={[styles.input, themeStyles.textTitle]}
-              placeholder="Required (10+ digits)"
-              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
-              keyboardType="phone-pad"
-              value={dataForm.phone}
-              onChangeText={(text) => handleChange('phone', text)}
-              autoCorrect={false}
-            />
-          </View>
-          
+
+          <FormRow label="Phone" placeholder="Required (10+ digits)" keyboardType="phone-pad" autoCorrect={false} error={phoneError} {...inputProps('phone')} />
+
           <View style={[styles.separator, themeStyles.separatorColor]} />
-          
-          {/* Email Row */}
-          <View style={styles.rowInput}>
-            <Text style={[styles.rowLabel, themeStyles.textTitle]}>Email</Text>
-            <TextInput
-              style={[styles.input, themeStyles.textTitle]}
-              placeholder="Optional"
-              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={dataForm.email}
-              onChangeText={(text) => handleChange('email', text)}
-              autoCorrect={false}
-            />
-          </View>
+
+          <FormRow label="Email" placeholder="Optional" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} {...inputProps('email')} />
         </View>
-        
+
         {phoneError && <Text style={styles.errorHelper}>Phone number must be at least 10 digits</Text>}
 
         <Text style={styles.sectionHeader}>Address</Text>
-        
+
         <View style={[styles.groupContainer, themeStyles.cardBg, themeStyles.cardBorder]}>
-          {/* Address Line 1 */}
-          <View style={styles.rowInput}>
-            <Text style={[styles.rowLabel, themeStyles.textTitle, addressError && styles.labelError]}>Street</Text>
-            <TextInput
-              style={[styles.input, themeStyles.textTitle]}
-              placeholder="Required (5+ chars)"
-              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
-              value={dataForm.line1}
-              onChangeText={(text) => handleChange('line1', text)}
-            />
-          </View>
-          
+          <FormRow label="Street" placeholder="Required (5+ chars)" error={addressError} {...inputProps('line1')} />
+
           <View style={[styles.separator, themeStyles.separatorColor]} />
-          
-          {/* Address Line 2 */}
-          <View style={styles.rowInput}>
-            <Text style={[styles.rowLabel, themeStyles.textTitle]}>Street 2</Text>
-            <TextInput
-              style={[styles.input, themeStyles.textTitle]}
-              placeholder="Apt, suite, unit (optional)"
-              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
-              value={dataForm.line2}
-              onChangeText={(text) => handleChange('line2', text)}
-            />
-          </View>
-          
+
+          <FormRow label="Street 2" placeholder="Apt, suite, unit (optional)" {...inputProps('line2')} />
+
           <View style={[styles.separator, themeStyles.separatorColor]} />
-          
-          {/* City */}
-          <View style={styles.rowInput}>
-            <Text style={[styles.rowLabel, themeStyles.textTitle]}>City</Text>
-            <TextInput
-              style={[styles.input, themeStyles.textTitle]}
-              placeholder="Optional"
-              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
-              value={dataForm.city}
-              onChangeText={(text) => handleChange('city', text)}
-            />
-          </View>
-          
+
+          <FormRow label="City" placeholder="Optional" {...inputProps('city')} />
+
           <View style={[styles.separator, themeStyles.separatorColor]} />
-          
-          {/* State */}
-          <View style={styles.rowInput}>
-            <Text style={[styles.rowLabel, themeStyles.textTitle]}>State</Text>
-            <TextInput
-              style={[styles.input, themeStyles.textTitle]}
-              placeholder="Optional"
-              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
-              value={dataForm.state}
-              onChangeText={(text) => handleChange('state', text)}
-            />
-          </View>
-          
+
+          <FormRow label="State" placeholder="Optional" {...inputProps('state')} />
+
           <View style={[styles.separator, themeStyles.separatorColor]} />
-          
-          {/* Zip */}
-          <View style={styles.rowInput}>
-            <Text style={[styles.rowLabel, themeStyles.textTitle]}>Zip Code</Text>
-            <TextInput
-              style={[styles.input, themeStyles.textTitle]}
-              placeholder="Optional"
-              placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
-              keyboardType="number-pad"
-              value={dataForm.zip}
-              onChangeText={(text) => handleChange('zip', text)}
-            />
-          </View>
+
+          <FormRow label="Zip Code" placeholder="Optional" keyboardType="number-pad" {...inputProps('zip')} />
         </View>
-        
+
         {addressError && <Text style={styles.errorHelper}>Address must be at least 5 characters</Text>}
 
         <TouchableOpacity
@@ -275,6 +227,54 @@ export default function CreateCustomerScreen() {
   );
 }
 
+/** One settings-style row; flashes a soft green tint whenever the AI fills it (highlightAt changes) */
+function FormRow({
+  label,
+  placeholder,
+  value,
+  onChangeText,
+  highlightAt,
+  error,
+  isDark,
+  ...inputProps
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  highlightAt?: number;
+  error?: boolean;
+  isDark: boolean;
+  keyboardType?: KeyboardTypeOptions;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  autoCorrect?: boolean;
+}) {
+  const themeStyles = isDark ? darkStyles : lightStyles;
+  const glow = useSharedValue(0);
+  useEffect(() => {
+    if (!highlightAt) return;
+    glow.value = 0;
+    glow.value = withSequence(withTiming(1, { duration: 220, easing: Easing.out(Easing.quad) }), withDelay(1400, withTiming(0, { duration: 900 })));
+  }, [highlightAt]);
+  const glowStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(glow.value, [0, 1], ['rgba(52,211,153,0)', isDark ? 'rgba(52,211,153,0.22)' : 'rgba(52,211,153,0.16)']),
+  }));
+
+  return (
+    <Animated.View style={[styles.rowInput, glowStyle]}>
+      <Text style={[styles.rowLabel, themeStyles.textTitle, error && styles.labelError]}>{label}</Text>
+      <TextInput
+        style={[styles.input, themeStyles.textTitle]}
+        placeholder={placeholder}
+        placeholderTextColor={isDark ? '#5c6e84' : '#c4c4c6'}
+        value={value}
+        onChangeText={onChangeText}
+        {...inputProps}
+      />
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -284,14 +284,10 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 40,
   },
-  headerSaveBtn: {
-    paddingHorizontal: 8,
+  headerAiBtn: {
+    paddingHorizontal: 4,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  headerSaveText: {
-    fontSize: 17,
-    fontWeight: '600',
   },
   errorContainer: {
     backgroundColor: 'rgba(255, 59, 48, 0.12)',

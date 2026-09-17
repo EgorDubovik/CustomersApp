@@ -38,6 +38,8 @@ export interface CompanyPhone {
   description?: string;
   color?: string;
   is_primary?: boolean;
+  /** Telephony provider handling the line; null = calls aren't routed through us (no call flows) */
+  provider?: string | null;
 }
 
 interface AuthContextType {
@@ -112,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             description: p.description,
             color: p.color,
             is_primary: p.is_primary,
+            provider: p.provider ?? null,
           }));
           setCompanyPhones(phones);
           await storage.setItem('company_phones', JSON.stringify(phones));

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { CompanyPhone } from '@/context/AuthContext';
 import { styles as appStyles } from '@/components/appointment/styles';
@@ -22,6 +23,7 @@ export const phoneKey = (phone: string | null | undefined) => (phone || '').repl
 /** Bottom sheet: tick / untick company numbers to filter the conversation list by line */
 export default function CallsSettingsModal({ visible, onClose, companyPhones, hiddenPhones, onToggle, onShowAll, isDark }: Props) {
   const c = isDark ? callsPalette.dark : callsPalette.light;
+  const router = useRouter();
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
@@ -58,6 +60,24 @@ export default function CallsSettingsModal({ visible, onClose, companyPhones, hi
                 </Pressable>
               );
             })}
+
+            {/* Per-number configuration (call flows, …) lives on its own screen */}
+            <Pressable
+              onPress={() => {
+                onClose();
+                router.push('/calls/phone-settings' as any);
+              }}
+              style={({ pressed }) => [styles.settingsLinkBtn, { backgroundColor: c.inputBg, borderColor: c.cardBorder }, pressed && { opacity: 0.7 }]}
+            >
+              <View style={[styles.settingsIcon, { backgroundColor: c.primaryMuted }]}>
+                <SymbolView name={{ ios: 'arrow.triangle.branch', android: 'account_tree', web: 'account_tree' }} size={15} tintColor={c.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: c.text }}>Call Flow Settings</Text>
+                <Text style={{ fontSize: 12, color: c.textMuted }}>Choose how each number answers</Text>
+              </View>
+              <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} size={14} tintColor={c.textFaint} />
+            </Pressable>
           </ScrollView>
 
           <View style={appStyles.modalActions}>
