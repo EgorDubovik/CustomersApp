@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { SocketProvider } from '@/context/SocketContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { useAppStateActive } from '@/hooks/useAppStateActive';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { SettingsProvider, useSettings } from '@/context/SettingsContext';
 
 export {
@@ -68,6 +69,9 @@ function RootLayoutNav() {
 
   // Enable silent background configuration refreshing when transitioning back to active state
   useAppStateActive();
+
+  // Register this device for push and open the screen of a tapped notification
+  usePushNotifications();
 
   useEffect(() => {
     if (isLoading || isSettingsLoading) return;

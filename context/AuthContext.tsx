@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as storage from '../utils/storage';
 import { API_URL } from '../constants/Config';
+import { unregisterPushToken } from '../utils/pushNotifications';
 
 export interface User {
   id?: number;
@@ -198,6 +199,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    // While the session is still valid: stop this phone getting the user's pushes
+    if (token) await unregisterPushToken(token);
+
     try {
       await storage.removeItem('auth_token');
       await storage.removeItem('auth_user');
