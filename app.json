@@ -9,7 +9,12 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.childofbelarus.apexflow"
+      "bundleIdentifier": "com.childofbelarus.apexflow",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "appleTeamId": "UKHPRW32L4",
+      "buildNumber": "2"
     },
     "android": {
       "adaptiveIcon": {
@@ -43,7 +48,8 @@
           "cameraPermission": "Allow ApexFlow to use the camera to take job pictures."
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
