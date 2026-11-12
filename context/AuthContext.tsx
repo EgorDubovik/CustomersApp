@@ -1,7 +1,13 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import * as storage from '../utils/storage';
 import { API_URL } from '../constants/Config';
-import { unregisterPushToken } from '../utils/pushNotifications';
+import { forgetPushToken, unregisterPushToken } from '../utils/pushNotifications';
+
+/** A request to our API that needs the session — i.e. anything but signing in. */
+function isSessionRequest(input: RequestInfo | URL): boolean {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  return !!API_URL && url.startsWith(API_URL) && !url.startsWith(`${API_URL}/auth/`);
+}
 
 export interface User {
   id?: number;
@@ -11,6 +17,8 @@ export interface User {
   company_id?: number;
   color?: string;
   roles_ids?: number[];
+  /** Per-user settings from initial-data, all values are strings ('true' / 'false' / '3') */
+  settings?: Record<string, string>;
 }
 
 export interface CompanySettings {
@@ -59,6 +67,8 @@ interface AuthContextType {
   login: (token: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
   fetchInitialData: (token: string) => Promise<void>;
+  /** Saves one user setting (POST /profile/update-settings); resolves false if the server refused */
+  updateUserSetting: (key: string, value: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -202,6 +212,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // While the session is still valid: stop this phone getting the user's pushes
     if (token) await unregisterPushToken(token);
 
+    await clearSession();
+  };
+
+  /** Forgets the session on this device; the root layout then redirects to /login. */
+  const clearSession = async () => {
     try {
       await storage.removeItem('auth_token');
       await storage.removeItem('auth_user');
@@ -221,12 +236,91 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  /*
+   * Any 401 from our API means the stored session is dead, so sign out instead of
+   * letting each screen show "Unauthorized". The usual way to get here: SecureStore
+   * lives in the iOS Keychain, which survives deleting the app, so a reinstall
+   * starts with the previous install's token, long since revoked on the server.
+   *
+   * One interceptor around fetch rather than a check in every call site — the
+   * screens call fetch directly in dozens of places. Sign-in itself is excluded:
+   * there a 401 is just a wrong password.
+   */
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
+  const clearSessionRef = useRef(clearSession);
+  clearSessionRef.current = clearSession;
+
+  useEffect(() => {
+    const originalFetch = globalThis.fetch;
+    let expiring = false;
+
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await originalFetch(input, init);
+
+      if (response.status === 401 && tokenRef.current && !expiring && isSessionRequest(input)) {
+        expiring = true;
+        console.warn('[auth] Session rejected by the server (401), signing out');
+        // The push token can't be removed with a dead session; the next sign-in
+        // on this phone re-binds it on the server.
+        forgetPushToken()
+          .then(() => clearSessionRef.current())
+          .finally(() => {
+            expiring = false;
+          });
+      }
+
+      return response;
+    };
+
+    return () => {
+      globalThis.fetch = originalFetch;
+    };
+  }, []);
+
+  // Optimistic: the switch flips at once and flips back if the server says no
+  const applyUserSetting = (key: string, value: string | undefined) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const settings = { ...prev.settings };
+      if (value === undefined) delete settings[key];
+      else settings[key] = value;
+      const next = { ...prev, settings };
+      storage.setItem('auth_user', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
+
+  const updateUserSetting = async (key: string, value: string): Promise<boolean> => {
+    if (!token) return false;
+    const previous = user?.settings?.[key];
+    applyUserSetting(key, value);
+
+    try {
+      const response = await fetch(`${API_URL}/profile/update-settings`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ key, value }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return true;
+    } catch (e) {
+      console.error(`Failed to update user setting "${key}"`, e);
+      applyUserSetting(key, previous);
+      return false;
+    }
+  };
+
   // Role ids: 1 admin, 2 technician, 3 dispatcher (nestjs/src/auth/enums/role.enum.ts)
   const isStaff = !!user?.roles_ids?.some((r) => r === 1 || r === 3);
 
   return (
     <AuthContext.Provider
-      value={{ token, user, isLoading, companySettings, companyServices, companyEmployees, companyPhones, isStaff, callsUnread, setCallsUnread, login, logout, fetchInitialData }}
+      value={{ token, user, isLoading, companySettings, companyServices, companyEmployees, companyPhones, isStaff, callsUnread, setCallsUnread, login, logout, fetchInitialData, updateUserSetting }}
     >
       {children}
     </AuthContext.Provider>

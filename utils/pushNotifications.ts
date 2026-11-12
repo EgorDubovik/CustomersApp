@@ -122,6 +122,11 @@ export async function unregisterPushToken(authToken: string): Promise<void> {
   }
 }
 
+/** Session already dead on the server: just drop the local copy of the token. */
+export async function forgetPushToken(): Promise<void> {
+  await storage.removeItem(STORAGE_KEY);
+}
+
 /**
  * Screen to open for a tapped notification. The backend speaks in web paths
  * (`/calls/<conversationId>`); this is the only place that knows how they map

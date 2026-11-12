@@ -3,9 +3,10 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { AppTheme, NavigationMap, useSettings } from '@/context/SettingsContext';
+import { useToast } from '@/context/ToastContext';
 import { SymbolView } from 'expo-symbols';
 import React from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch } from 'react-native';
 
 interface SegmentedControlProps<T> {
   options: { label: string; value: T }[];
@@ -119,10 +120,25 @@ function SettingSection({ title, children }: { title: string; children: React.Re
 
 export default function SettingsScreen() {
   const { theme, setTheme, navigationMap, setNavigationMap } = useSettings();
-  const { logout } = useAuth();
+  const { logout, user, updateUserSetting } = useAuth();
+  const { showToast } = useToast();
   const colorScheme = useColorScheme();
   const bg = Colors[colorScheme].background;
   const isDark = colorScheme === 'dark';
+
+  // Server-side user settings; missing means on — the backend defaults both to 'true'
+  const isOn = (key: string) => user?.settings?.[key] !== 'false';
+  const toggleSetting = async (key: string, enabled: boolean) => {
+    const saved = await updateUserSetting(key, enabled ? 'true' : 'false');
+    if (!saved) showToast({ message: 'Could not save the setting', type: 'error' });
+  };
+  const notificationSwitch = (key: string) => (
+    <Switch
+      value={isOn(key)}
+      onValueChange={(enabled) => toggleSetting(key, enabled)}
+      trackColor={{ true: Colors[colorScheme].tint }}
+    />
+  );
 
   const themeOptions: { label: string; value: AppTheme }[] = [
     { label: 'System', value: 'system' },
@@ -185,6 +201,27 @@ export default function SettingsScreen() {
               onSelect={setNavigationMap}
             />
           }
+        />
+      </SettingSection>
+
+      <SettingSection title="Notifications">
+        <SettingRow
+          iconName={{
+            ios: 'bell',
+            android: 'notifications',
+            web: 'notifications',
+          }}
+          title="Push Notifications"
+          rightElement={notificationSwitch('pushNotifications')}
+        />
+        <SettingRow
+          iconName={{
+            ios: 'envelope',
+            android: 'mail',
+            web: 'mail',
+          }}
+          title="Email Notifications"
+          rightElement={notificationSwitch('emailNotifications')}
         />
       </SettingSection>
 
