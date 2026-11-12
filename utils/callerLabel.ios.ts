@@ -19,7 +19,7 @@ export function formatPhoneForDisplay(number: string): string {
 }
 
 /** Номер звонящего: бэкенд кладёт его в X-Customer-Number, как и для веб-софтфона. */
-function customerNumberOf(call: Call): string | null {
+export function customerNumberOf(call: Call): string | null {
   const header = call.inviteCustomHeaders?.find((h) => h.name.toLowerCase() === 'x-customer-number');
   return header?.value || call.callerNumber || null;
 }
@@ -38,7 +38,7 @@ async function callKitUuidOf(call: Call, attempts = 10, delayMs = 200): Promise<
 }
 
 /** Имя клиента по номеру — тот же поиск, что делает веб-софтфон при входящем. */
-async function findCustomerName(number: string, authToken: string): Promise<string | null> {
+export async function findCustomerName(number: string, authToken: string): Promise<string | null> {
   try {
     const response = await fetch(`${API_URL}/customers?search=${encodeURIComponent(number)}`, {
       headers: { Authorization: `Bearer ${authToken}`, Accept: 'application/json' },

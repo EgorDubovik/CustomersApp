@@ -38,6 +38,8 @@ export interface CompanyEmployee {
   id: number;
   name: string;
   color: string;
+  /** For calling a colleague from the dialer */
+  phone?: string | null;
   active?: number;
   roles_ids?: number[];
 }
@@ -112,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             id: e.id,
             name: e.name,
             color: e.color,
+            phone: e.phone ?? null,
             active: e.active,
             roles_ids: e.roles_ids,
           }));

@@ -10,6 +10,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import CallsSettingsModal, { phoneKey } from '@/components/calls/CallsSettingsModal';
 import ConversationItem from '@/components/calls/ConversationItem';
 import * as storage from '@/utils/storage';
+import { outboundCallsSupported } from '@/utils/outboundCall';
 import { callsPalette, callsStyles as styles } from '@/components/calls/styles';
 import { ICall, IConversation, ISmsMessage } from '@/components/calls/types';
 import { applyConversationRead, getBusinessNumberFromCall, isCallUnread, isMessageUnread, mergeCallIntoConversation, mergeSmsIntoConversation, sortByActivity } from '@/components/calls/helpers';
@@ -190,6 +191,19 @@ export default function CallsScreen() {
       <View style={styles.searchWrap}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <Text style={{ fontSize: 26, fontWeight: '800', color: c.text }}>Calls</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {/* Звонок с номера компании. Вкладка Calls есть только у админов и диспетчеров,
+              так что техникам кнопка не видна; звонки из приложения пока только на iPhone. */}
+          {outboundCallsSupported && (
+            <Pressable
+              onPress={() => router.push('/calls/dialer' as any)}
+              hitSlop={8}
+              accessibilityLabel="New call"
+              style={({ pressed }) => [styles.headerIconBtn, { backgroundColor: '#22C55E' }, pressed && { opacity: 0.6 }]}
+            >
+              <SymbolView name={{ ios: 'phone.fill', android: 'call', web: 'call' }} size={18} tintColor="#fff" />
+            </Pressable>
+          )}
           <Pressable onPress={() => setSettingsVisible(true)} hitSlop={8} style={({ pressed }) => [styles.headerIconBtn, { backgroundColor: hiddenPhones.size ? c.primaryMuted : c.card }, pressed && { opacity: 0.6 }]}>
             <SymbolView name={{ ios: 'line.3.horizontal.decrease.circle', android: 'filter_list', web: 'filter_list' }} size={20} tintColor={hiddenPhones.size ? c.primary : c.textMuted} />
             {hiddenPhones.size > 0 && (
@@ -198,6 +212,7 @@ export default function CallsScreen() {
               </View>
             )}
           </Pressable>
+          </View>
         </View>
         <View style={[styles.searchInputRow, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
           <SymbolView name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} size={16} tintColor={c.textMuted} />
