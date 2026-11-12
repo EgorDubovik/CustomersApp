@@ -23,7 +23,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { FadeInDown, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { FadeInDown, runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 // Subcomponents and Assets
 import { PulsingDot } from '@/components/appointment/AppointmentUI';
@@ -110,6 +110,10 @@ export default function AppointmentDetailsScreen() {
   const pullY = useSharedValue(0); // 0 = closed, maxPull = map fully open
   const pullStart = useSharedValue(0); // pullY at the moment the gesture started
   const touchStart = useSharedValue({ x: 0, y: 0 });
+  // While the map is open the ScrollView must not scroll: a drag up has to close the map
+  // only. Both used to react to the same drag, so the content travelled twice as far as
+  // the map and ended up scrolled under the hero once the map had closed.
+  const [heroOpen, setHeroOpen] = useState(false);
 
   const onVerticalScroll = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
@@ -163,10 +167,13 @@ export default function AppointmentDetailsScreen() {
           else if (e.velocityY < -600) open = false;
           else open = pullY.value > maxPull * (pullStart.value > 1 ? 0.5 : 0.35);
           pullY.value = withSpring(open ? maxPull : 0, { damping: 20, stiffness: 180, mass: 0.7, overshootClamping: true });
+          runOnJS(setHeroOpen)(open);
         })
         .onFinalize((_, success) => {
           if (!success) {
-            pullY.value = withSpring(pullY.value > maxPull / 2 ? maxPull : 0, { damping: 20, stiffness: 180, mass: 0.7, overshootClamping: true });
+            const open = pullY.value > maxPull / 2;
+            pullY.value = withSpring(open ? maxPull : 0, { damping: 20, stiffness: 180, mass: 0.7, overshootClamping: true });
+            runOnJS(setHeroOpen)(open);
           }
         }),
     [maxPull],
@@ -580,7 +587,7 @@ export default function AppointmentDetailsScreen() {
       <GestureDetector gesture={pullGesture}>
         <Animated.View style={[{ flex: 1 }, pulledContentStyle]}>
           <Animated.ScrollView
-            scrollEnabled={scrollEnabled}
+            scrollEnabled={scrollEnabled && !heroOpen}
             style={{ flex: 1 }}
             contentContainerStyle={{ flexGrow: 1 }}
             showsVerticalScrollIndicator={false}
