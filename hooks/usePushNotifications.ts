@@ -8,7 +8,6 @@ import { isPushSupported, registerPushToken, routeForNotification } from '../uti
  * Wires push notifications into the signed-in app:
  * - registers this device's token after sign-in and on every start (the backend
  *   upserts, and `updated_at` tells it the device is still alive);
- * - re-registers when APNs/FCM rotates the token;
  * - opens the right screen when a notification is tapped, including the tap
  *   that cold-started the app.
  *
@@ -23,15 +22,10 @@ export function usePushNotifications() {
   useEffect(() => {
     if (!isPushSupported || !token) return;
 
+    // Once per sign-in / app start. No addPushTokenListener here: fetching the
+    // Expo token fires that listener itself, so re-registering from it loops
+    // forever. A rotated token is picked up on the next start instead.
     registerPushToken(token);
-
-    // The listener receives the native device token; the Expo token derived
-    // from it changes too, so simply register again.
-    const subscription = Notifications.addPushTokenListener(() => {
-      registerPushToken(token);
-    });
-
-    return () => subscription.remove();
   }, [token]);
 
   useEffect(() => {
