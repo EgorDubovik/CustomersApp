@@ -56,7 +56,14 @@
       ],
       "expo-audio",
       "expo-web-browser",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "microphonePermission": "Allow ApexFlow to use the microphone to talk to customers on calls."
+        }
+      ],
+      "./plugins/withVoipCalls"
     ],
     "experiments": {
       "typedRoutes": true

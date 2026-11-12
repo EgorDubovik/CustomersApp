@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import * as storage from '../utils/storage';
 import { API_URL } from '../constants/Config';
 import { forgetPushToken, unregisterPushToken } from '../utils/pushNotifications';
+import { forgetVoipCalls, stopVoipCalls } from '../utils/voipCalls';
 
 /** A request to our API that needs the session — i.e. anything but signing in. */
 function isSessionRequest(input: RequestInfo | URL): boolean {
@@ -211,6 +212,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     // While the session is still valid: stop this phone getting the user's pushes
     if (token) await unregisterPushToken(token);
+    // …and the calls: otherwise the next person on this phone gets this user's calls
+    if (token) await stopVoipCalls(token);
 
     await clearSession();
   };
@@ -263,7 +266,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn('[auth] Session rejected by the server (401), signing out');
         // The push token can't be removed with a dead session; the next sign-in
         // on this phone re-binds it on the server.
-        forgetPushToken()
+        Promise.all([forgetPushToken(), forgetVoipCalls()])
           .then(() => clearSessionRef.current())
           .finally(() => {
             expiring = false;

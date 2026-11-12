@@ -5,6 +5,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@telnyx/react-native-voice-sdk": [
+        "./types/telnyx-react-native-voice-sdk.d.ts"
       ]
     }
   },

@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
+import { VoipCallsProvider } from '@/components/VoipCallsProvider';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { SocketProvider } from '@/context/SocketContext';
 import { ToastProvider } from '@/context/ToastContext';
@@ -52,7 +53,9 @@ export default function RootLayout() {
       <SettingsProvider>
         <AuthProvider>
           <SocketProvider>
-            <RootLayoutNav />
+            <VoipCallsProvider>
+              <RootLayoutNav />
+            </VoipCallsProvider>
           </SocketProvider>
         </AuthProvider>
       </SettingsProvider>
