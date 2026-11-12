@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createCredentialConfig,
   createTelnyxVoipClient,
+  TelnyxConnectionState,
   TelnyxVoipClient,
   VoicePnBridge,
 } from '@telnyx/react-voice-commons-sdk';
@@ -10,10 +11,11 @@ import { API_URL } from '../constants/Config';
 import * as storage from './storage';
 
 /**
- * Входящие звонки на iPhone: телефон входит в Telnyx тем же SIP-логином, что и
- * софтфон в браузере, и становится ещё одной его регистрацией. Telnyx звонит во
- * все регистрации сразу, а спящий телефон будит VoIP-пушем (сертификат загружен
- * в портал Telnyx). Экран звонка (CallKit) показывает нативная часть SDK.
+ * Входящие звонки на iPhone: телефон входит в Telnyx своим SIP-логином
+ * (`?device=mobile`), отдельным от софтфона в браузере, а сценарий звонит сразу
+ * на оба. Отдельный — потому что, пока у логина есть живая сессия во вкладке,
+ * Telnyx шлёт вызов только в неё и спящий телефон пушем не будит (проверено,
+ * `pushWhenActive` не помогает). Экран звонка (CallKit) показывает нативная часть SDK.
  *
  * Android сюда не входит: там push нужен через FCM, это отдельная задача
  * (см. voipCalls.ts — заглушка для остальных платформ).
@@ -25,6 +27,25 @@ const VOIP_TOKEN_KEY = 'voip_push_token';
 
 /** Где SDK хранит вход для пробуждения пушем. Своего «забыть» у SDK нет. */
 const TELNYX_STORED_KEYS = ['@telnyx_username', '@telnyx_password', '@credential_token', '@push_token'];
+const TELNYX_STORED_USERNAME = '@telnyx_username';
+
+/** Ждём подключения к Telnyx, но не дольше `timeoutMs`: выход не должен виснуть без сети. */
+function waitForConnected(timeoutMs = 5000): Promise<boolean> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      subscription?.unsubscribe();
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    const subscription = voipClient.connectionState$.subscribe((state) => {
+      if (state === TelnyxConnectionState.CONNECTED) finish(true);
+    });
+  });
+}
 
 /**
  * PushKit выдаёт токен асинхронно после старта, и при первом запуске он может
@@ -41,7 +62,7 @@ async function waitForVoipToken(attempts = 10, delayMs = 1000): Promise<string |
 }
 
 async function fetchSipCredentials(authToken: string): Promise<{ sip_username: string; password: string } | null> {
-  const response = await fetch(`${API_URL}/telephony/webrtc-credentials`, {
+  const response = await fetch(`${API_URL}/telephony/webrtc-credentials?device=mobile`, {
     headers: { Authorization: `Bearer ${authToken}`, Accept: 'application/json' },
   });
   if (!response.ok) {
@@ -88,13 +109,17 @@ export async function startVoipCalls(authToken: string): Promise<void> {
     const credentials = await fetchSipCredentials(authToken);
     if (!credentials) return;
 
+    // Раньше телефон входил браузерным логином (или здесь был другой сотрудник):
+    // снимаем пуши со старого логина, иначе Telnyx будил бы телефон и его звонками.
+    const previous = await AsyncStorage.getItem(TELNYX_STORED_USERNAME).catch(() => null);
+    if (previous && previous !== credentials.sip_username) await disconnectFromTelnyx();
+
     await voipClient.login(
       createCredentialConfig(credentials.sip_username, credentials.password, {
         debug: __DEV__,
         pushNotificationDeviceToken: voipToken ?? undefined,
-        // Тот же SIP-логин обычно открыт и в браузере. Без этого флага Telnyx,
-        // видя живую сессию (вкладку), шлёт вызов только в неё, и спящий телефон
-        // не будится пушем вовсе — проверено на тесте.
+        // Пуш и тогда, когда сессия самого телефона ещё жива (приложение только
+        // что свернули): иначе такой звонок мог бы потеряться.
         pushWhenActive: true,
       }),
     );
@@ -103,11 +128,20 @@ export async function startVoipCalls(authToken: string): Promise<void> {
   if (voipToken) await registerVoipToken(authToken, voipToken);
 }
 
-/** Отключает телефон от Telnyx и стирает сохранённый вход, чтобы пуш не разбудил чужой аккаунт. */
+/**
+ * Отключает телефон от Telnyx и стирает сохранённый вход, чтобы пуш не разбудил
+ * телефон звонком чужого (или прежнего) логина.
+ *
+ * Снять пуши можно только через живое соединение, а в фоне SDK отключается сам —
+ * поэтому сначала, если нужно, подключаемся по сохранённому входу.
+ */
 async function disconnectFromTelnyx(): Promise<void> {
   try {
-    // Пока сокет жив: Telnyx перестаёт слать пуши на этот токен.
-    voipClient.disablePushNotifications();
+    const connected =
+      voipClient.currentConnectionState === TelnyxConnectionState.CONNECTED ||
+      ((await voipClient.loginFromStoredConfig().catch(() => false)) && (await waitForConnected()));
+    if (connected) voipClient.disablePushNotifications();
+    else console.warn('[voip] Not connected to Telnyx: pushes stay enabled for the previous login');
   } catch (e) {
     console.warn('[voip] Could not disable Telnyx pushes', e);
   }
