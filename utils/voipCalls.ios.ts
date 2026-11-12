@@ -92,6 +92,10 @@ export async function startVoipCalls(authToken: string): Promise<void> {
       createCredentialConfig(credentials.sip_username, credentials.password, {
         debug: __DEV__,
         pushNotificationDeviceToken: voipToken ?? undefined,
+        // Тот же SIP-логин обычно открыт и в браузере. Без этого флага Telnyx,
+        // видя живую сессию (вкладку), шлёт вызов только в неё, и спящий телефон
+        // не будится пушем вовсе — проверено на тесте.
+        pushWhenActive: true,
       }),
     );
   }

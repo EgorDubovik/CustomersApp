@@ -1,0 +1,76 @@
+diff --git a/node_modules/@telnyx/react-voice-commons-sdk/ios/CallKitBridge.swift b/node_modules/@telnyx/react-voice-commons-sdk/ios/CallKitBridge.swift
+index 812dfe0..7a63b1d 100644
+--- a/node_modules/@telnyx/react-voice-commons-sdk/ios/CallKitBridge.swift
++++ b/node_modules/@telnyx/react-voice-commons-sdk/ios/CallKitBridge.swift
+@@ -148,7 +148,7 @@ import React
+                 return
+             }
+ 
+-            let callHandle = CXHandle(type: .phoneNumber, value: handle)
++            let callHandle = CXHandle(type: .generic, value: handle)
+             let startCallAction = CXStartCallAction(call: uuid, handle: callHandle)
+             let transaction = CXTransaction(action: startCallAction)
+ 
+@@ -190,7 +190,7 @@ import React
+                 return
+             }
+ 
+-            let callHandle = CXHandle(type: .phoneNumber, value: handle)
++            let callHandle = CXHandle(type: .generic, value: handle)
+             let callUpdate = CXCallUpdate()
+             callUpdate.remoteHandle = callHandle
+             callUpdate.hasVideo = false
+@@ -521,7 +521,7 @@ import React
+                 return
+             }
+ 
+-            let callHandle = CXHandle(type: .phoneNumber, value: handle)
++            let callHandle = CXHandle(type: .generic, value: handle)
+             let callUpdate = CXCallUpdate()
+             callUpdate.remoteHandle = callHandle
+             callUpdate.localizedCallerName = displayName
+@@ -1034,7 +1034,7 @@ import React
+             configuration.maximumCallGroups = 2
+             configuration.maximumCallsPerCallGroup = 1
+             configuration.supportedHandleTypes = [.phoneNumber, .generic]
+-            configuration.includesCallsInRecents = true
++            configuration.includesCallsInRecents = false
+ 
+             let provider = CXProvider(configuration: configuration)
+             provider.setDelegate(self, queue: nil)
+@@ -1066,7 +1066,7 @@ import React
+                 "watchdogPlaceholder": true,
+             ]
+ 
+-            let handle = CXHandle(type: .phoneNumber, value: callerNumber)
++            let handle = CXHandle(type: .generic, value: callerNumber)
+             let callUpdate = CXCallUpdate()
+             callUpdate.remoteHandle = handle
+             callUpdate.hasVideo = false
+@@ -1226,7 +1226,7 @@ import React
+                 "source": "missed_call_push",
+             ]
+ 
+-            let handle = CXHandle(type: .phoneNumber, value: callerNumber)
++            let handle = CXHandle(type: .generic, value: callerNumber)
+             let callUpdate = CXCallUpdate()
+             callUpdate.remoteHandle = handle
+             callUpdate.hasVideo = false
+@@ -1505,7 +1505,7 @@ import React
+                 "isCallKitRegistered": false,
+             ]
+ 
+-            let handle = CXHandle(type: .phoneNumber, value: caller)
++            let handle = CXHandle(type: .generic, value: caller)
+             let callUpdate = CXCallUpdate()
+             callUpdate.remoteHandle = handle
+             callUpdate.hasVideo = false
+@@ -1894,7 +1894,7 @@ import React
+             ]
+ 
+             // Report to CallKit immediately
+-            let handle = CXHandle(type: .phoneNumber, value: callerNumber)
++            let handle = CXHandle(type: .generic, value: callerNumber)
+             let callUpdate = CXCallUpdate()
+             callUpdate.remoteHandle = handle
+             callUpdate.hasVideo = false
