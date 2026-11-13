@@ -5,11 +5,13 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { API_URL } from '@/constants/Config';
 import { useToast } from '@/context/ToastContext';
 import { PaymentProgressBar } from '../AppointmentUI';
+import DiscountModal from '../DiscountModal';
 import ExpenseModal from '../ExpenseModal';
+import MaterialModal from '../MaterialModal';
 import SwipeToDelete from '../SwipeToDelete';
 import SendInvoiceModal from '../SendInvoiceModal';
 import { palette, styles } from '../styles';
-import { IAppointmentDetails, IExpense, IInvoice, IPayment, IService } from '../types';
+import { IAppointmentDetails, IExpense, IInvoice, IMaterial, IPayment, IService } from '../types';
 import { AddRowButton, EmptyText, HeaderIconButton, SectionCard } from './shared';
 
 interface Props {
@@ -27,10 +29,16 @@ export default function WorkTab({ appointment, token, isDark, formatDate, onAddS
   const c = isDark ? palette.dark : palette.light;
 
   const services = appointment.job.services || [];
-  const subtotal = services.reduce((sum, s) => sum + parseFloat(s.price || '0'), 0);
-  const taxableSubtotal = services.reduce((sum, s) => sum + (s.taxable ? parseFloat(s.price || '0') : 0), 0);
-  const taxAmount = Math.max(0, appointment.job.totalAmount - subtotal);
-  const taxRatePct = taxableSubtotal > 0 ? (taxAmount / taxableSubtotal) * 100 : 0;
+  const materials = appointment.job.materials || [];
+  const discount = appointment.job.discount ?? null;
+  // Billing comes from the backend (services + materials, tax, discount) - same numbers as the web
+  const subtotal = appointment.job.subTotal ?? services.reduce((sum, s) => sum + parseFloat(s.price || '0'), 0);
+  const taxAmount = appointment.job.taxTotal ?? 0;
+  const taxRatePct = Number(appointment.job.taxRate) || 0;
+  const discountAmount = appointment.job.discountAmount ?? 0;
+
+  const [materialModal, setMaterialModal] = useState<{ open: boolean; material: IMaterial | null }>({ open: false, material: null });
+  const [discountModalOpen, setDiscountModalOpen] = useState(false);
 
   return (
     <View style={{ gap: 12 }}>
@@ -77,6 +85,32 @@ export default function WorkTab({ appointment, token, isDark, formatDate, onAddS
 
           <AddRowButton label="Add Service" onPress={onAddService} isDark={isDark} c={c} />
 
+          {/* Materials */}
+          <Text style={{ fontSize: 11, fontWeight: '700', color: c.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 10, marginBottom: 4 }}>
+            Materials
+          </Text>
+          {materials.map((m, idx) => {
+            const qty = Number(m.quantity) || 1;
+            const price = Number(m.price) || 0;
+            return (
+              <Pressable
+                key={m.id}
+                onPress={() => setMaterialModal({ open: true, material: m })}
+                style={({ pressed }) => [styles.serviceItem, { backgroundColor: idx % 2 === 0 ? c.inputBg : 'transparent', alignItems: 'flex-start', opacity: pressed ? 0.7 : 1 }]}
+              >
+                <View style={{ flex: 1, gap: 2, paddingRight: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: c.text }}>{m.title}</Text>
+                  <Text style={{ fontSize: 12, color: c.textMuted }}>
+                    Qty: {qty} @ ${price.toFixed(2)}
+                    {m.is_taxble ? '  · taxable' : ''}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: c.text, marginTop: 1 }}>${(qty * price).toFixed(2)}</Text>
+              </Pressable>
+            );
+          })}
+          <AddRowButton label="Add Material" onPress={() => setMaterialModal({ open: true, material: null })} isDark={isDark} c={c} />
+
           <View style={[styles.divider, { backgroundColor: c.divider, marginTop: 4 }]} />
 
           {/* Totals */}
@@ -84,6 +118,24 @@ export default function WorkTab({ appointment, token, isDark, formatDate, onAddS
             <View style={styles.totalRow}>
               <Text style={{ fontSize: 13, fontWeight: '600', color: c.textMuted }}>Subtotal</Text>
               <Text style={{ fontSize: 14, fontWeight: '600', color: c.text }}>${subtotal.toFixed(2)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: c.textMuted }}>Discount</Text>
+              {discount ? (
+                <Pressable onPress={() => setDiscountModalOpen(true)} hitSlop={8}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: c.warning }}>
+                    {discount.type === 'amount' ? `-$${(Number(discount.amount) || 0).toFixed(2)}` : `-${discount.amount}% (-$${discountAmount.toFixed(2)})`}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() => setDiscountModalOpen(true)}
+                  hitSlop={8}
+                  style={({ pressed }) => ({ width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: c.primaryMuted, opacity: pressed ? 0.7 : 1 })}
+                >
+                  <SymbolView name={{ ios: 'plus', android: 'add', web: 'add' }} size={12} tintColor={c.primary} />
+                </Pressable>
+              )}
             </View>
             {taxAmount > 0 && (
               <View style={styles.totalRow}>
@@ -145,6 +197,26 @@ export default function WorkTab({ appointment, token, isDark, formatDate, onAddS
       <Animated.View entering={FadeInDown.duration(350).delay(160)}>
         <ExpensesCard appointment={appointment} token={token} isDark={isDark} onRefresh={onRefresh} setScrollEnabled={setScrollEnabled} />
       </Animated.View>
+
+      {/* Totals are recalculated by the backend, so after a change we just reload the appointment */}
+      <MaterialModal
+        visible={materialModal.open}
+        onClose={() => setMaterialModal({ open: false, material: null })}
+        jobId={appointment.job.id}
+        material={materialModal.material}
+        token={token}
+        isDark={isDark}
+        onSuccess={onRefresh}
+      />
+      <DiscountModal
+        visible={discountModalOpen}
+        onClose={() => setDiscountModalOpen(false)}
+        jobId={appointment.job.id}
+        discount={discount}
+        token={token}
+        isDark={isDark}
+        onSuccess={onRefresh}
+      />
     </View>
   );
 }

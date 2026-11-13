@@ -92,6 +92,21 @@ export interface IEmployee {
 
 export type AppointmentTabKey = 'work' | 'photos' | 'notes' | 'info';
 
+export interface IMaterial {
+  id: number;
+  title: string;
+  quantity: number;
+  price: number | string;
+  /** Spelled this way in the API */
+  is_taxble: boolean;
+}
+
+export interface IDiscount {
+  id: number;
+  amount: number | string;
+  type: 'amount' | 'percentage';
+}
+
 export interface IAppointmentDetails {
   id: number;
   status: number;
@@ -103,7 +118,14 @@ export interface IAppointmentDetails {
     id: number;
     totalAmount: number;
     remainingBalance: number;
+    /** Billing computed by the backend: services + materials, tax, minus the discount */
+    subTotal?: number;
+    taxTotal?: number;
+    taxRate?: number;
+    discountAmount?: number;
     services: IService[];
+    materials?: IMaterial[];
+    discount?: IDiscount | null;
     payments: IPayment[];
     images?: IImage[];
     expenses?: IExpense[];
