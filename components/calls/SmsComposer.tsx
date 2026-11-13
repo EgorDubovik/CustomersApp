@@ -183,9 +183,27 @@ export default function SmsComposer({ isDark, conversationId, companyPhone, reci
     const file = await prepareImage(asset);
     const form = new FormData();
     form.append('image', file as any);
-    const r = await fetch(`${API_URL}/telephony/sms/media`, { method: 'POST', headers: authHeaders, body: form });
-    if (!r.ok) throw new Error(await errorMessage(r, 'Failed to attach the image'));
-    return (await r.json()) as ISmsMedia;
+    // XMLHttpRequest, not fetch: the global fetch here is expo/fetch, which can't send a
+    // { uri, name, type } file in FormData ("Unsupported FormData value format")
+    return new Promise<ISmsMedia>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_URL}/telephony/sms/media`);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.setRequestHeader('Accept', 'application/json');
+      xhr.timeout = 120_000;
+      xhr.onload = () => {
+        let body: any = null;
+        try {
+          body = JSON.parse(xhr.responseText);
+        } catch {}
+        if (xhr.status >= 200 && xhr.status < 300 && body?.url) return resolve(body as ISmsMedia);
+        const m = body?.message;
+        reject(new Error((Array.isArray(m) ? m.join(', ') : m) || `Failed to attach the image (status ${xhr.status})`));
+      };
+      xhr.onerror = () => reject(new Error('Network error while attaching the image'));
+      xhr.ontimeout = () => reject(new Error('Attaching the image timed out'));
+      xhr.send(form);
+    });
   };
 
   const pickFrom = async (source: 'camera' | 'library') => {
