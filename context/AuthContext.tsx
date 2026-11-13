@@ -54,6 +54,8 @@ export interface CompanyPhone {
   provider?: string | null;
   /** Calls on this line are recorded automatically — the Record button starts lit */
   auto_record_calls?: boolean;
+  /** Link to the company's 10DLC campaign; texts go out only from an ASSIGNED number */
+  sms_status?: 'NOT_ASSIGNED' | 'PENDING' | 'ASSIGNED' | 'FAILED';
 }
 
 interface AuthContextType {
@@ -64,6 +66,8 @@ interface AuthContextType {
   companyServices: CompanyService[];
   companyEmployees: CompanyEmployee[];
   companyPhones: CompanyPhone[];
+  /** Company passed 10DLC registration — without it no number may send SMS */
+  smsDlcApproved: boolean;
   /** Admin or dispatcher — everything a technician-only account can't see (Calls tab, …) */
   isStaff: boolean;
   /** Company-wide unread calls + texts; seeded by initial-data, kept fresh by the socket */
@@ -86,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [companyServices, setCompanyServices] = useState<CompanyService[]>([]);
   const [companyEmployees, setCompanyEmployees] = useState<CompanyEmployee[]>([]);
   const [companyPhones, setCompanyPhones] = useState<CompanyPhone[]>([]);
+  const [smsDlcApproved, setSmsDlcApproved] = useState(false);
   const [callsUnread, setCallsUnread] = useState(0);
 
   const fetchInitialData = async (activeToken: string) => {
@@ -133,9 +138,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             is_primary: p.is_primary,
             provider: p.provider ?? null,
             auto_record_calls: !!p.auto_record_calls,
+            sms_status: p.sms_status ?? 'NOT_ASSIGNED',
           }));
           setCompanyPhones(phones);
           await storage.setItem('company_phones', JSON.stringify(phones));
+        }
+        if (data.companyDlc) {
+          const approved = !!data.companyDlc.isApproved;
+          setSmsDlcApproved(approved);
+          await storage.setItem('company_dlc_approved', approved ? 'true' : 'false');
         }
       }
     } catch (e) {
@@ -152,6 +163,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const storedServices = await storage.getItem('company_services');
         const storedEmployees = await storage.getItem('company_employees');
         const storedPhones = await storage.getItem('company_phones');
+        const storedDlcApproved = await storage.getItem('company_dlc_approved');
+        setSmsDlcApproved(storedDlcApproved === 'true');
         
         if (storedToken) {
           setToken(storedToken);
@@ -233,12 +246,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await storage.removeItem('company_services');
       await storage.removeItem('company_employees');
       await storage.removeItem('company_phones');
+      await storage.removeItem('company_dlc_approved');
       setToken(null);
       setUser(null);
       setCompanySettings(null);
       setCompanyServices([]);
       setCompanyEmployees([]);
       setCompanyPhones([]);
+      setSmsDlcApproved(false);
       setCallsUnread(0);
     } catch (e) {
       console.error('Failed to remove auth data on logout', e);
@@ -329,7 +344,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ token, user, isLoading, companySettings, companyServices, companyEmployees, companyPhones, isStaff, callsUnread, setCallsUnread, login, logout, fetchInitialData, updateUserSetting }}
+      value={{ token, user, isLoading, companySettings, companyServices, companyEmployees, companyPhones, smsDlcApproved, isStaff, callsUnread, setCallsUnread, login, logout, fetchInitialData, updateUserSetting }}
     >
       {children}
     </AuthContext.Provider>

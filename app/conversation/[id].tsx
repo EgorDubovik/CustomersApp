@@ -311,7 +311,15 @@ export default function ConversationScreen() {
         />
       )}
 
-      {!loading && !error && <SmsComposer isDark={isDark} recipientLabel={customer?.name || formatPhoneNumber(customerPhone) || undefined} />}
+      {!loading && !error && !!conversation && (
+        <SmsComposer
+          isDark={isDark}
+          conversationId={conversation.id}
+          companyPhone={matched ?? null}
+          recipientLabel={customer?.name || formatPhoneNumber(customerPhone) || undefined}
+          onSent={(message) => setConversation((prev) => (prev ? mergeSmsIntoConversation(prev, message) : prev))}
+        />
+      )}
 
       <TranscriptionModal visible={!!transcriptionCallId} onClose={() => setTranscriptionCallId(null)} callId={transcriptionCallId} token={token} isDark={isDark} />
     </KeyboardAvoidingView>

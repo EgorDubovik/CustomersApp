@@ -31,14 +31,22 @@ export interface ICall {
   ai_details: { summary: string | null; transcription: string | null } | null;
 }
 
+export interface ISmsMedia {
+  url: string;
+  content_type: string;
+}
+
 export interface ISmsMessage {
   id: string;
   conversation_id: string;
   direction: 'inbound' | 'outbound';
   from_number: string;
   to_number: string;
-  text: string;
-  status: 'received' | 'sent' | 'delivered' | 'failed';
+  /** An MMS made of a single picture may have no caption */
+  text: string | null;
+  media?: ISmsMedia[] | null;
+  /** Outbound goes queued (handed to the carrier) → sent → delivered */
+  status: 'received' | 'queued' | 'sent' | 'delivered' | 'failed';
   read_at: string | null;
   created_at: string;
 }
