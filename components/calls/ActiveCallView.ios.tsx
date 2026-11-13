@@ -109,12 +109,12 @@ export default function ActiveCallView({ fromPhoneId }: { fromPhoneId?: number }
   const ended = state === TelnyxCallState.ENDED || state === TelnyxCallState.FAILED;
 
   // Чем назвать звонок бэкенду, чтобы тот включил запись. У исходящего Telnyx
-  // присылает ID ноги в момент ответа. У входящего ID ноги в приглашении нет, зато
-  // есть сессия звонка — по ней бэкенд сам найдёт ногу клиента.
+  // присылает ID ноги в момент ответа. У входящего ID своей ноги в приглашении нет,
+  // поэтому бэкенд кладёт в звонок X-Caller-Leg-Id — ногу звонящего, её и пишем.
   const telnyxCall = call?.telnyxCall as any;
-  const callControlId: string | null = telnyxCall?.telnyxCallControlId ?? null;
-  const callSessionId: string | null = telnyxCall?.telnyxSessionId ?? null;
-  const canRecord = !!callControlId || (!!call?.isIncoming && !!callSessionId && state === TelnyxCallState.ACTIVE);
+  const callerLegId = call?.inviteCustomHeaders?.find((h) => h.name.toLowerCase() === 'x-caller-leg-id')?.value ?? null;
+  const callControlId: string | null = telnyxCall?.telnyxCallControlId ?? (call?.isIncoming ? callerLegId : null);
+  const canRecord = !!callControlId && state === TelnyxCallState.ACTIVE;
 
   // У номера с автозаписью разговор пишется сам — кнопка просто загорается, чтобы
   // было видно, что идёт запись; нажатием её можно выключить (как в вебе).
@@ -133,7 +133,7 @@ export default function ActiveCallView({ fromPhoneId }: { fromPhoneId?: number }
       const response = await fetch(`${API_URL}/telephony/recording/${next ? 'start' : 'stop'}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify(callControlId ? { callControlId } : { callSessionId }),
+        body: JSON.stringify({ callControlId }),
       });
       if (!response.ok) throw new Error();
       setRecording(next);
