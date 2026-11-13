@@ -40,6 +40,17 @@ function formatProgressive(input: string): string {
 }
 
 /**
+ * Что вставили или набрали — к цифрам номера: «+1 (754) 226-4666», «754.226.4666»
+ * и «17542264666» дают одно и то же. * и # оставляем, остальное выбрасываем.
+ */
+function normalizeTyped(text: string): string {
+  const kept = text.replace(/[^\d*#]/g, '');
+  const digitsOnly = kept.replace(/\D/g, '');
+  if (digitsOnly.length === 11 && digitsOnly.startsWith('1') && kept === digitsOnly) return digitsOnly.slice(1);
+  return /^[\d]+$/.test(kept) ? kept.slice(0, 10) : kept;
+}
+
+/**
  * Набор номера — повторяет веб-диалер: выбор номера компании, с которого звоним,
  * клавиатура, звонок, переход к SMS с набранным номером и звонок коллеге из списка.
  * Звонить могут только админы и диспетчеры: экран открывается с вкладки Calls,
@@ -191,8 +202,10 @@ export default function DialerScreen() {
         )}
       </View>
 
-      {/* ─── Number display / employee search ─── */}
-      <View style={{ minHeight: 84, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 }}>
+      {/* ─── Number display / employee search ───
+          В режиме клавиатуры поле занимает всё место между шапкой и клавиатурой
+          и стоит по его центру. */}
+      <View style={[{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: showEmployees ? 20 : 6 }, showEmployees ? { minHeight: 84 } : { flex: 1 }]}>
         {showEmployees ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%' }}>
             <View style={[styles.searchInputRow, { flex: 1, backgroundColor: c.card, borderColor: c.cardBorder }]}>
@@ -211,21 +224,40 @@ export default function DialerScreen() {
               <SymbolView name={{ ios: 'circle.grid.3x3.fill', android: 'dialpad', web: 'dialpad' }} size={18} tintColor={c.textMuted} />
             </Pressable>
           </View>
-        ) : number ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontSize: 32, fontWeight: '300', color: c.text, letterSpacing: 0.5 }} numberOfLines={1} adjustsFontSizeToFit>
-              {formatProgressive(number)}
-            </Text>
-            <Pressable onPress={() => setNumber('')} hitSlop={10}>
-              <SymbolView name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }} size={18} tintColor={c.textFaint} />
-            </Pressable>
-          </View>
         ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Text style={{ fontSize: 26, fontWeight: '300', color: c.textFaint }}>Enter number...</Text>
-            <Pressable onPress={() => setShowEmployees(true)} hitSlop={10} style={({ pressed }) => [styles.headerIconBtn, { backgroundColor: c.card }, pressed && { opacity: 0.6 }]}>
-              <SymbolView name={{ ios: 'person.2.fill', android: 'group', web: 'group' }} size={18} tintColor={c.textMuted} />
-            </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+            {/* Пустое место слева той же ширины, что кнопка справа, — чтобы номер стоял ровно по центру */}
+            <View style={{ width: 36 }} />
+            {/* Настоящее поле ввода, но без системной клавиатуры — набирают своей.
+                Ради стандартного меню iOS «Вставить»: нажатие на поле с курсором его
+                показывает, и вставка не спрашивает разрешения на доступ к буферу. */}
+            <TextInput
+              value={number ? formatProgressive(number) : ''}
+              onChangeText={(text) => setNumber(normalizeTyped(text))}
+              placeholder="Enter number..."
+              placeholderTextColor={c.textFaint}
+              showSoftInputOnFocus={false}
+              autoFocus
+              autoCorrect={false}
+              spellCheck={false}
+              textAlign="center"
+              selectionColor={c.primary}
+              // Полный номер чуть мельче, чтобы «(754) 226-4666» целиком влезал и на узком экране
+              style={{ flex: 1, fontSize: !number ? 32 : number.length >= 10 ? 34 : 38, fontWeight: '300', color: c.text, paddingVertical: 8, paddingHorizontal: 0 }}
+            />
+            {number ? (
+              <Pressable onPress={() => setNumber('')} hitSlop={10} style={{ width: 36, alignItems: 'center' }}>
+                <SymbolView name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }} size={22} tintColor={c.textFaint} />
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => setShowEmployees(true)}
+                hitSlop={10}
+                style={({ pressed }) => [{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: c.card }, pressed && { opacity: 0.6 }]}
+              >
+                <SymbolView name={{ ios: 'person.2.fill', android: 'group', web: 'group' }} size={22} tintColor={c.textMuted} />
+              </Pressable>
+            )}
           </View>
         )}
         {!connected && !showEmployees && (
@@ -269,7 +301,7 @@ export default function DialerScreen() {
           )}
         />
       ) : (
-        <View style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: insets.bottom + 20 }}>
+        <View style={{ paddingBottom: insets.bottom + 20 }}>
           {/* ─── Keypad ─── */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', paddingHorizontal: 30, rowGap: 14 }}>
             {KEYPAD.map(({ digit, letters }) => (

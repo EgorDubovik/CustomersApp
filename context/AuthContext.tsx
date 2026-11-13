@@ -52,6 +52,8 @@ export interface CompanyPhone {
   is_primary?: boolean;
   /** Telephony provider handling the line; null = calls aren't routed through us (no call flows) */
   provider?: string | null;
+  /** Calls on this line are recorded automatically — the Record button starts lit */
+  auto_record_calls?: boolean;
 }
 
 interface AuthContextType {
@@ -130,6 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             color: p.color,
             is_primary: p.is_primary,
             provider: p.provider ?? null,
+            auto_record_calls: !!p.auto_record_calls,
           }));
           setCompanyPhones(phones);
           await storage.setItem('company_phones', JSON.stringify(phones));

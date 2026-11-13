@@ -7,6 +7,7 @@ import {
   VoicePnBridge,
 } from '@telnyx/react-voice-commons-sdk';
 import Constants from 'expo-constants';
+import { AppState } from 'react-native';
 import { API_URL } from '../constants/Config';
 import * as storage from './storage';
 
@@ -28,6 +29,11 @@ const VOIP_TOKEN_KEY = 'voip_push_token';
 /** Где SDK хранит вход для пробуждения пушем. Своего «забыть» у SDK нет. */
 const TELNYX_STORED_KEYS = ['@telnyx_username', '@telnyx_password', '@credential_token', '@push_token'];
 const TELNYX_STORED_USERNAME = '@telnyx_username';
+
+/** Ход подключения к телефонии — только в разработке, чтобы видеть в логах Metro, где застряли. */
+function log(message: string): void {
+  if (__DEV__) console.log(`[voip] ${message}`);
+}
 
 /** Ждём подключения к Telnyx, но не дольше `timeoutMs`: выход не должен виснуть без сети. */
 function waitForConnected(timeoutMs = 5000): Promise<boolean> {
@@ -102,12 +108,28 @@ async function registerVoipToken(authToken: string, voipToken: string): Promise<
  * второй вход параллельно сорвал бы звонок, поэтому тогда только обновляем токен.
  */
 export async function startVoipCalls(authToken: string): Promise<void> {
+  log('Enabling incoming and outgoing calls');
   const voipToken = await waitForVoipToken();
   if (!voipToken) console.warn('[voip] No PushKit token yet: calls will ring only while the app is open');
 
-  if (!(await TelnyxVoipClient.isLaunchedFromPushNotification())) {
+  // Разбудил пуш — SDK входит сам. Но если он так и не подключился (пуш давно
+  // обработан, а флаг остался), без своего входа телефон остался бы без телефонии:
+  // ни звонить, ни принимать звонки при открытом приложении.
+  let selfLogin = true;
+  if (await TelnyxVoipClient.isLaunchedFromPushNotification()) {
+    log('Launched from a call push, waiting for the SDK to log in');
+    selfLogin = !(await waitForConnected(8000));
+    if (selfLogin) {
+      log('SDK did not connect after the push, logging in ourselves');
+      // Флаг от давно обработанного пуша: стираем, иначе каждый запуск ждал бы впустую
+      await Promise.all([VoicePnBridge.clearPendingPushAction(), VoicePnBridge.clearPendingVoipPush()]).catch(() => undefined);
+    }
+  }
+
+  if (selfLogin && voipClient.currentConnectionState !== TelnyxConnectionState.CONNECTED) {
     const credentials = await fetchSipCredentials(authToken);
     if (!credentials) return;
+    log(`Logging in to Telnyx as ${credentials.sip_username}`);
 
     // Раньше телефон входил браузерным логином (или здесь был другой сотрудник):
     // снимаем пуши со старого логина, иначе Telnyx будил бы телефон и его звонками.
@@ -174,4 +196,53 @@ export async function stopVoipCalls(authToken: string): Promise<void> {
 export async function forgetVoipCalls(): Promise<void> {
   await disconnectFromTelnyx();
   await storage.removeItem(VOIP_TOKEN_KEY);
+}
+
+/**
+ * Держит телефон подключённым к Telnyx, пока приложение на экране.
+ *
+ * SDK сам переподключается при возврате из фона, но после одной неудачи (например,
+ * сразу после звонка, пока аудиосессия ещё освобождается) больше не пробует, и
+ * приложение остаётся без телефонии: ни позвонить, ни принять звонок при открытом
+ * приложении. Поэтому, пока приложение активно и связи нет, пробуем снова с
+ * нарастающей паузой. В фоне не трогаем: там SDK отключается намеренно, звонок
+ * придёт пушем.
+ */
+export function keepConnectedWhileActive(): () => void {
+  let attempt = 0;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const schedule = () => {
+    if (timer) return;
+    const delay = Math.min(30000, 3000 * 2 ** attempt);
+    timer = setTimeout(async () => {
+      timer = null;
+      if (AppState.currentState !== 'active' || voipClient.currentConnectionState !== TelnyxConnectionState.DISCONNECTED) return;
+      // Идёт звонок — его не трогаем, SDK восстанавливает его сам
+      if (voipClient.currentActiveCall) return;
+      attempt += 1;
+      log(`Telnyx is disconnected while the app is open, reconnecting (attempt ${attempt})`);
+      const ok = await voipClient.loginFromStoredConfig().catch(() => false);
+      if (!ok || voipClient.currentConnectionState === TelnyxConnectionState.DISCONNECTED) schedule();
+    }, delay);
+  };
+
+  const stateSub = voipClient.connectionState$.subscribe((state) => {
+    if (state === TelnyxConnectionState.CONNECTED) {
+      attempt = 0;
+      if (timer) clearTimeout(timer);
+      timer = null;
+    } else if (state === TelnyxConnectionState.DISCONNECTED || state === TelnyxConnectionState.ERROR) {
+      schedule();
+    }
+  });
+  const appSub = AppState.addEventListener('change', (next) => {
+    if (next === 'active' && voipClient.currentConnectionState === TelnyxConnectionState.DISCONNECTED) schedule();
+  });
+
+  return () => {
+    stateSub.unsubscribe();
+    appSub.remove();
+    if (timer) clearTimeout(timer);
+  };
 }

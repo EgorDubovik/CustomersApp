@@ -2,7 +2,7 @@ import { TelnyxVoiceApp } from '@telnyx/react-voice-commons-sdk';
 import { useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { labelIncomingCall } from '../utils/callerLabel.ios';
-import { startVoipCalls, voipClient } from '../utils/voipCalls.ios';
+import { keepConnectedWhileActive, startVoipCalls, voipClient } from '../utils/voipCalls.ios';
 
 /**
  * Подключает телефон к телефонии Telnyx, чтобы входящие звонки приходили
@@ -21,7 +21,19 @@ export function VoipCallsProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!token || !isStaff) return;
-    startVoipCalls(token).catch((e) => console.warn('[voip] Could not enable incoming calls', e));
+    let cancelled = false;
+    let stopWatching: (() => void) | null = null;
+    startVoipCalls(token)
+      .catch((e) => console.warn('[voip] Could not enable incoming calls', e))
+      // Следить за связью — только после основного входа: иначе страховка успела бы
+      // войти по сохранённым данным прежнего пользователя раньше, чем вход их сменит.
+      .finally(() => {
+        if (!cancelled) stopWatching = keepConnectedWhileActive();
+      });
+    return () => {
+      cancelled = true;
+      stopWatching?.();
+    };
   }, [token, isStaff]);
 
   // Входящий дошёл до приложения — подписываем его на экране звонка (номер в
