@@ -141,8 +141,8 @@ export default function ActiveCallView({ fromPhoneId }: { fromPhoneId?: number }
     }
   };
 
-  // Диалог этого клиента на этой же нашей линии. Открывается поверх экрана
-  // разговора: звонок идёт дальше, «назад» возвращает к нему.
+  // Диалог этого клиента на этой же нашей линии. Звонок идёт дальше, вернуться
+  // к нему — зелёной плашкой внизу.
   const [openingConversation, setOpeningConversation] = useState(false);
   const openConversation = async () => {
     if (openingConversation || !token) return;
@@ -160,6 +160,10 @@ export default function ActiveCallView({ fromPhoneId }: { fromPhoneId?: number }
         if (response.ok) {
           const body = await response.json();
           if (body?.conversation_id) {
+            // Диалог — поверх вкладки Calls, а не поверх экрана звонка: тогда «назад»
+            // (и кнопка, и свайп) ведёт к нижнему меню. К звонку возвращает плашка.
+            if (router.canDismiss()) router.dismissAll();
+            router.navigate('/(tabs)/calls' as any);
             router.push(`/conversation/${body.conversation_id}` as any);
             return;
           }

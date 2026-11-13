@@ -218,7 +218,10 @@ export default function ConversationScreen() {
       {/* ─── Header ─── */}
       <View style={[styles.convHeader, { paddingTop: insets.top + 6, backgroundColor: c.card, borderBottomColor: c.cardBorder }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Pressable onPress={() => router.back()} hitSlop={10} style={({ pressed }) => [styles.headerBackBtn, { backgroundColor: c.inputBg }, pressed && { opacity: 0.7 }]}>
+          {/* Всегда на вкладку Calls, а не «на шаг назад»: диалог открывают и с экрана
+              идущего звонка, и оттуда нужен доступ к нижнему меню (Schedule и т. д.).
+              К звонку возвращает зелёная плашка. */}
+          <Pressable onPress={() => router.dismissTo('/(tabs)/calls' as any)} hitSlop={10} style={({ pressed }) => [styles.headerBackBtn, { backgroundColor: c.inputBg }, pressed && { opacity: 0.7 }]}>
             <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={16} tintColor={c.text} />
           </Pressable>
           {/* Tap: open the customer (when known). Long-press: context menu. Unknown caller: tap opens the menu too. */}
