@@ -108,9 +108,13 @@ export default function ActiveCallView({ fromPhoneId }: { fromPhoneId?: number }
     companyPhones.find((p) => p.id === fromPhoneId) ?? (headerLine ? companyPhones.find((p) => last10(p.phone) === headerLine) : undefined);
   const ended = state === TelnyxCallState.ENDED || state === TelnyxCallState.FAILED;
 
-  // ID звонка в Call Control: у исходящего Telnyx присылает его в момент ответа,
-  // у входящего — сразу в приглашении. Без него записью не управлять.
-  const callControlId: string | null = (call?.telnyxCall as any)?.telnyxCallControlId ?? null;
+  // Чем назвать звонок бэкенду, чтобы тот включил запись. У исходящего Telnyx
+  // присылает ID ноги в момент ответа. У входящего ID ноги в приглашении нет, зато
+  // есть сессия звонка — по ней бэкенд сам найдёт ногу клиента.
+  const telnyxCall = call?.telnyxCall as any;
+  const callControlId: string | null = telnyxCall?.telnyxCallControlId ?? null;
+  const callSessionId: string | null = telnyxCall?.telnyxSessionId ?? null;
+  const canRecord = !!callControlId || (!!call?.isIncoming && !!callSessionId && state === TelnyxCallState.ACTIVE);
 
   // У номера с автозаписью разговор пишется сам — кнопка просто загорается, чтобы
   // было видно, что идёт запись; нажатием её можно выключить (как в вебе).
@@ -118,18 +122,18 @@ export default function ActiveCallView({ fromPhoneId }: { fromPhoneId?: number }
   const [recording, setRecording] = useState(false);
   const [recordingBusy, setRecordingBusy] = useState(false);
   useEffect(() => {
-    if (callControlId) setRecording(autoRecord);
-  }, [autoRecord, callControlId]);
+    if (canRecord) setRecording(autoRecord);
+  }, [autoRecord, canRecord]);
 
   const toggleRecording = async () => {
-    if (!callControlId || !token || recordingBusy) return;
+    if (!canRecord || !token || recordingBusy) return;
     const next = !recording;
     setRecordingBusy(true);
     try {
       const response = await fetch(`${API_URL}/telephony/recording/${next ? 'start' : 'stop'}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ callControlId }),
+        body: JSON.stringify(callControlId ? { callControlId } : { callSessionId }),
       });
       if (!response.ok) throw new Error();
       setRecording(next);
@@ -309,9 +313,9 @@ export default function ActiveCallView({ fromPhoneId }: { fromPhoneId?: number }
               {control('circle.grid.3x3.fill', 'Keypad', false, () => setShowKeypad(true), 'dialpad')}
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
-              {/* Записью можно управлять, только когда у звонка есть ID в Call Control — после ответа */}
+              {/* Записью можно управлять только после ответа: до него звонку нечего писать */}
               {control('record.circle', recording ? 'Recording' : 'Record', recording, toggleRecording, 'fiber_manual_record', {
-                disabled: !callControlId,
+                disabled: !canRecord,
                 busy: recordingBusy,
                 activeColor: c.danger,
               })}
