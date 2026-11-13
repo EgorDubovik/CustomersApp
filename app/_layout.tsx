@@ -13,6 +13,8 @@ import { SocketProvider } from '@/context/SocketContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { useAppStateActive } from '@/hooks/useAppStateActive';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useOpenCallScreen } from '@/hooks/useActiveCall';
+import { ActiveCallBanner } from '@/components/ActiveCallBanner';
 import { SettingsProvider, useSettings } from '@/context/SettingsContext';
 
 export {
@@ -76,6 +78,9 @@ function RootLayoutNav() {
   // Register this device for push and open the screen of a tapped notification
   usePushNotifications();
 
+  // Answered call or back to the app mid-call — show the in-call screen
+  useOpenCallScreen();
+
   useEffect(() => {
     if (isLoading || isSettingsLoading) return;
 
@@ -116,6 +121,8 @@ function RootLayoutNav() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         </Stack>
+        {/* Поверх всех экранов, пока идёт разговор: вернуться к звонку одним нажатием */}
+        <ActiveCallBanner />
       </ToastProvider>
     </ThemeProvider>
   );

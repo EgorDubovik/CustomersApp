@@ -11,7 +11,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { callsPalette } from '@/components/calls/styles';
 import { formatClock } from '@/components/calls/helpers';
 import { customerNumberOf, findCustomerName, formatPhoneForDisplay } from '@/utils/callerLabel.ios';
-import { voipClient } from '@/utils/voipCalls.ios';
+import { useActiveCall, useCallSeconds } from '@/hooks/useActiveCall.ios';
 
 const DTMF_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
 
@@ -56,36 +56,31 @@ export default function ActiveCallView({ fromPhoneId }: { fromPhoneId?: number }
   const isDark = useColorScheme() === 'dark';
   const c = isDark ? callsPalette.dark : callsPalette.light;
 
-  const [call, setCall] = useState<Call | null>(voipClient.currentActiveCall);
-  const [state, setState] = useState<TelnyxCallState | null>(call?.currentState ?? null);
+  // Звонок и его состояние — общие для всего приложения: экран закрывают и
+  // открывают посреди разговора (плашка «вернуться к звонку»), а таймер считает
+  // от начала разговора, а не от открытия экрана.
+  const { call, state: liveState } = useActiveCall();
+  const seconds = useCallSeconds(call, liveState);
   const [muted, setMuted] = useState(false);
   const [speaker, setSpeaker] = useState(false);
   const [showKeypad, setShowKeypad] = useState(false);
   const [dtmf, setDtmf] = useState('');
-  const [seconds, setSeconds] = useState(0);
   const [name, setName] = useState<string | null>(null);
   const hadCall = useRef(!!call);
-
-  useEffect(() => {
-    const sub = voipClient.activeCall$.subscribe((next) => {
-      if (next) hadCall.current = true;
-      setCall(next);
-    });
-    return () => sub.unsubscribe();
-  }, []);
+  if (call) hadCall.current = true;
+  const state = !call && hadCall.current ? TelnyxCallState.ENDED : liveState;
 
   // Звонок закончился — показываем «Call ended» и через секунду возвращаемся назад
   useEffect(() => {
     if (call || !hadCall.current) return;
-    setState(TelnyxCallState.ENDED);
-    const t = setTimeout(() => router.back(), 1000);
+    const t = setTimeout(() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/calls' as any)), 1000);
     return () => clearTimeout(t);
   }, [call, router]);
 
   useEffect(() => {
     if (!call) return;
-    const subs = [call.callState$.subscribe(setState), call.isMuted$.subscribe(setMuted)];
-    return () => subs.forEach((s) => s.unsubscribe());
+    const sub = call.isMuted$.subscribe(setMuted);
+    return () => sub.unsubscribe();
   }, [call]);
 
   // Маршрут звука может смениться и в обход кнопки (системное меню, наушники) —
@@ -94,12 +89,6 @@ export default function ActiveCallView({ fromPhoneId }: { fromPhoneId?: number }
     VoicePnBridge.isSpeakerEnabled().then(setSpeaker).catch(() => {});
     return VoicePnBridge.addSpeakerStateListener(setSpeaker);
   }, []);
-
-  useEffect(() => {
-    if (state !== TelnyxCallState.ACTIVE) return;
-    const t = setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => clearInterval(t);
-  }, [state]);
 
   const number = call ? (call.isIncoming ? customerNumberOf(call) : call.destination) : null;
 
