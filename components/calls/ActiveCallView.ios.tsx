@@ -193,6 +193,15 @@ export default function ActiveCallView({ fromPhoneId }: { fromPhoneId?: number }
     setSpeaker(actual);
   };
 
+  // Свернуть экран звонка: туда, откуда пришли (или на Calls, если некуда)
+  const leaveToApp = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/calls' as any));
+
+  // Расписание — вкладка Schedule; стек над вкладками убираем, чтобы было нижнее меню
+  const openSchedule = () => {
+    if (router.canDismiss()) router.dismissAll();
+    router.navigate('/(tabs)' as any);
+  };
+
   const sendDtmf = (key: string) => {
     setDtmf((prev) => (prev + key).slice(-20));
     call?.dtmf(key).catch(() => {});
@@ -234,7 +243,32 @@ export default function ActiveCallView({ fromPhoneId }: { fromPhoneId?: number }
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 30, alignItems: 'center' }}>
+    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 8, paddingBottom: insets.bottom + 30, alignItems: 'center' }}>
+      {/* ─── Top bar: свернуть в приложение · расписание ───
+          Во время разговора нужно и посмотреть приложение, и предложить клиенту
+          время. Звонок при этом идёт дальше, вернуться к нему — плашкой внизу. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', alignSelf: 'stretch', paddingHorizontal: 16, marginBottom: 24 }}>
+        <Pressable
+          onPress={leaveToApp}
+          hitSlop={10}
+          accessibilityLabel="Back to app"
+          style={({ pressed }) => [{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: c.card }, pressed && { opacity: 0.6 }]}
+        >
+          <SymbolView name={{ ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }} size={18} tintColor={c.text} />
+        </Pressable>
+        <Pressable
+          onPress={openSchedule}
+          hitSlop={10}
+          style={({ pressed }) => [
+            { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 40, borderRadius: 20, backgroundColor: c.card },
+            pressed && { opacity: 0.6 },
+          ]}
+        >
+          <SymbolView name={{ ios: 'calendar', android: 'calendar_today', web: 'calendar_today' }} size={16} tintColor={c.text} />
+          <Text style={{ color: c.text, fontWeight: '600' }}>Schedule</Text>
+        </Pressable>
+      </View>
+
       {/* ─── Who ─── */}
       <View style={{ alignItems: 'center', gap: 6, paddingHorizontal: 24 }}>
         <Text style={{ fontSize: 30, fontWeight: '600', color: c.text, textAlign: 'center' }} numberOfLines={2}>

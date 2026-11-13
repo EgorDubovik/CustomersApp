@@ -35,10 +35,14 @@ export function ActiveCallBanner() {
     };
   }, [number, token]);
 
-  const live = state === TelnyxCallState.ACTIVE || state === TelnyxCallState.HELD || state === TelnyxCallState.RINGING;
+  // Входящий — только после ответа: пока он звонит, его принимают на экране CallKit.
+  // Исходящий — и пока идут гудки: экран звонка могли свернуть, вернуться к нему нужно.
+  const talking = state === TelnyxCallState.ACTIVE || state === TelnyxCallState.HELD;
+  const dialing = !call?.isIncoming && (state === TelnyxCallState.RINGING || state === TelnyxCallState.CONNECTING);
+  const live = talking || dialing;
   if (!call || !live || pathname === ACTIVE_CALL_ROUTE) return null;
 
-  const status = state === TelnyxCallState.ACTIVE ? formatClock(seconds) : state === TelnyxCallState.HELD ? 'On hold' : 'Calling…';
+  const status = dialing ? 'Calling…' : state === TelnyxCallState.HELD ? 'On hold' : formatClock(seconds);
 
   return (
     <Pressable
