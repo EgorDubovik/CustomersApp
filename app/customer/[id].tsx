@@ -264,7 +264,7 @@ export default function CustomerDetailsScreen() {
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: c.bg }]}>
-        <Stack.Screen options={{ title: 'Customer Details' }} />
+        <Stack.Screen options={{ title: 'Customer Details', headerBackButtonDisplayMode: 'minimal', headerBackTitle: '' }} />
         <View style={{ alignItems: 'center', gap: 16 }}>
           <ActivityIndicator size="large" color={c.primary} />
           <Text style={{ fontSize: 15, fontWeight: '600', color: c.textMuted }}>
@@ -278,7 +278,7 @@ export default function CustomerDetailsScreen() {
   if (error || !customer) {
     return (
       <View style={[styles.center, { backgroundColor: c.bg, paddingHorizontal: 32 }]}>
-        <Stack.Screen options={{ title: 'Customer Details' }} />
+        <Stack.Screen options={{ title: 'Customer Details', headerBackButtonDisplayMode: 'minimal', headerBackTitle: '' }} />
         <View style={[styles.errorCard, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
           <SymbolView
             name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }}
@@ -317,6 +317,9 @@ export default function CustomerDetailsScreen() {
           headerTitleStyle: {
             fontWeight: '700',
           },
+          // Chevron only — the previous route's name ("(tabs)") is noise
+          headerBackButtonDisplayMode: 'minimal',
+          headerBackTitle: '',
           headerRight: () => (
             <Pressable
               onPress={() => {
@@ -516,6 +519,14 @@ export default function CustomerDetailsScreen() {
               {sortedJobs.length}
             </Text>
           </View>
+          {/* New appointment for this customer */}
+          <Pressable
+            onPress={() => router.push({ pathname: '/appointment/create', params: { customerId: String(customer.id) } } as any)}
+            hitSlop={8}
+            style={({ pressed }) => ({ marginLeft: 'auto', width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: c.primary, opacity: pressed ? 0.7 : 1 })}
+          >
+            <SymbolView name={{ ios: 'plus', android: 'add', web: 'add' }} size={16} tintColor="#fff" />
+          </Pressable>
         </View>
 
         {sortedJobs.length === 0 ? (
