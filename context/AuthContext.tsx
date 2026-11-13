@@ -44,6 +44,12 @@ export interface CompanyEmployee {
   roles_ids?: number[];
 }
 
+export interface CompanyTag {
+  id: number;
+  title: string;
+  color: string;
+}
+
 export interface CompanyPhone {
   id: number;
   phone: string;
@@ -64,6 +70,7 @@ interface AuthContextType {
   isLoading: boolean;
   companySettings: CompanySettings | null;
   companyServices: CompanyService[];
+  companyTags: CompanyTag[];
   companyEmployees: CompanyEmployee[];
   companyPhones: CompanyPhone[];
   /** Company passed 10DLC registration — without it no number may send SMS */
@@ -88,6 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [companyServices, setCompanyServices] = useState<CompanyService[]>([]);
+  const [companyTags, setCompanyTags] = useState<CompanyTag[]>([]);
   const [companyEmployees, setCompanyEmployees] = useState<CompanyEmployee[]>([]);
   const [companyPhones, setCompanyPhones] = useState<CompanyPhone[]>([]);
   const [smsDlcApproved, setSmsDlcApproved] = useState(false);
@@ -110,6 +118,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data.companySettings) {
           setCompanySettings(data.companySettings);
           await storage.setItem('company_settings', JSON.stringify(data.companySettings));
+        }
+        if (Array.isArray(data.companyTags)) {
+          const tags: CompanyTag[] = data.companyTags.map((t: any) => ({ id: t.id, title: t.title, color: t.color }));
+          setCompanyTags(tags);
+          await storage.setItem('company_tags', JSON.stringify(tags));
         }
         if (data.companyServices) {
           setCompanyServices(data.companyServices);
@@ -163,6 +176,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const storedServices = await storage.getItem('company_services');
         const storedEmployees = await storage.getItem('company_employees');
         const storedPhones = await storage.getItem('company_phones');
+        const storedTags = await storage.getItem('company_tags');
+        if (storedTags) {
+          try {
+            setCompanyTags(JSON.parse(storedTags));
+          } catch {}
+        }
         const storedDlcApproved = await storage.getItem('company_dlc_approved');
         setSmsDlcApproved(storedDlcApproved === 'true');
         
@@ -246,6 +265,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await storage.removeItem('company_services');
       await storage.removeItem('company_employees');
       await storage.removeItem('company_phones');
+      await storage.removeItem('company_tags');
       await storage.removeItem('company_dlc_approved');
       setToken(null);
       setUser(null);
@@ -253,6 +273,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCompanyServices([]);
       setCompanyEmployees([]);
       setCompanyPhones([]);
+      setCompanyTags([]);
       setSmsDlcApproved(false);
       setCallsUnread(0);
     } catch (e) {
@@ -344,7 +365,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ token, user, isLoading, companySettings, companyServices, companyEmployees, companyPhones, smsDlcApproved, isStaff, callsUnread, setCallsUnread, login, logout, fetchInitialData, updateUserSetting }}
+      value={{ token, user, isLoading, companySettings, companyServices, companyTags, companyEmployees, companyPhones, smsDlcApproved, isStaff, callsUnread, setCallsUnread, login, logout, fetchInitialData, updateUserSetting }}
     >
       {children}
     </AuthContext.Provider>

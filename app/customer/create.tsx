@@ -87,7 +87,12 @@ export default function CreateCustomerScreen() {
         throw new Error(`Server returned status code ${response.status}`);
       }
 
-      router.back();
+      // Straight to booking this customer, like on the web. Replace, so Back from the
+      // appointment form returns to where the customer was started from, not to this form.
+      const created = await response.json().catch(() => null);
+      const newId = created?.customer?.id;
+      if (newId) router.replace({ pathname: '/appointment/create', params: { customerId: String(newId) } } as any);
+      else router.back();
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'An error occurred while creating the customer.');

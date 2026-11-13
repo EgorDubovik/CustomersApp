@@ -10,8 +10,9 @@ import {
   Platform,
   Pressable,
   Linking,
+  RefreshControl,
 } from 'react-native';
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs, useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/context/AuthContext';
@@ -101,7 +102,11 @@ export default function CustomersScreen() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const [refreshing, setRefreshing] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const searchRef = useRef('');
+  searchRef.current = searchQuery;
+  const firstFocus = useRef(true);
 
   const fetchCustomers = useCallback(async (search: string = '') => {
     if (!token) return;
@@ -156,6 +161,25 @@ export default function CustomersScreen() {
       clearTimeout(handler);
     };
   }, [searchQuery, fetchCustomers]);
+
+  // Coming back to the tab (e.g. after creating a customer) shows the fresh list
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false;
+        return;
+      }
+      const q = searchRef.current.trim();
+      if (q.length === 0 || q.length >= 3) fetchCustomers(q);
+    }, [fetchCustomers]),
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    const q = searchQuery.trim();
+    await fetchCustomers(q.length >= 3 ? q : '');
+    setRefreshing(false);
+  };
 
   const renderItem = ({ item }: { item: ICustomer }) => {
     const initials = item.name
@@ -302,6 +326,7 @@ export default function CustomersScreen() {
             renderItem={renderItem}
             contentContainerStyle={styles.flatListContent}
             keyboardDismissMode="on-drag"
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors[colorScheme].tint} />}
           />
         )}
       </View>

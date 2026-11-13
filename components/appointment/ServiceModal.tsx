@@ -37,6 +37,12 @@ interface ServiceModalProps {
   companyServices: CompanyService[];
   isDark: boolean;
   onSuccess: () => void;
+  /**
+   * Draft mode for a not-yet-created appointment: the service is handed back instead of
+   * being saved to a job (the create screen sends all services along with the appointment).
+   */
+  onLocalSave?: (service: { title: string; price: number; description: string; taxable: boolean; is_active: boolean }) => void;
+  onLocalDelete?: () => void;
 }
 
 export default function ServiceModal({
@@ -48,6 +54,8 @@ export default function ServiceModal({
   companyServices,
   isDark,
   onSuccess,
+  onLocalSave,
+  onLocalDelete,
 }: ServiceModalProps) {
   const c = isDark ? palette.dark : palette.light;
 
@@ -222,7 +230,7 @@ export default function ServiceModal({
   };
 
   const handleSaveService = async () => {
-    if (serviceFormLoading || !appointment || !token) return;
+    if (serviceFormLoading || (!onLocalSave && (!appointment || !token))) return;
 
     if (!serviceTitle.trim()) {
       Alert.alert('Required Field', 'Please enter a service title.');
@@ -234,6 +242,13 @@ export default function ServiceModal({
       Alert.alert('Invalid Price', 'Please enter a valid price.');
       return;
     }
+
+    if (onLocalSave) {
+      onLocalSave({ title: serviceTitle.trim(), price: priceNum, description: serviceDescription, taxable: serviceTaxable, is_active: true });
+      onClose();
+      return;
+    }
+    if (!appointment) return;
 
     setServiceFormLoading(true);
 
@@ -276,7 +291,13 @@ export default function ServiceModal({
   };
 
   const handleDeleteService = () => {
-    if (!editingService || !appointment || !token) return;
+    if (!editingService) return;
+    if (onLocalDelete) {
+      onLocalDelete();
+      onClose();
+      return;
+    }
+    if (!appointment || !token) return;
 
     Alert.alert(
       'Delete Service',
@@ -327,7 +348,7 @@ export default function ServiceModal({
     setShowSuggestions(false);
   };
 
-  if (!appointment) return null;
+  if (!appointment && !onLocalSave) return null;
 
   return (
     <Modal
