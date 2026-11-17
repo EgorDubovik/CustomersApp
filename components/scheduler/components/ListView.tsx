@@ -4,6 +4,7 @@ import { ListViewProps, CalendarEvent } from '../types';
 import { formatDate } from '../utils/TimeHelper';
 import DefaultListItem from './DefaultListItem';
 import { useColorScheme } from '@/components/useColorScheme';
+import { useRefreshControlKey } from '@/hooks/useRefreshControlKey';
 import Colors from '@/constants/Colors';
 
 const DATE_GROUP_FORMAT = 'MMM DD';
@@ -21,6 +22,7 @@ export default function ListView<T extends any>({
 	onRefresh?: () => void;
 }) {
 	const colorScheme = useColorScheme();
+	const refreshKey = useRefreshControlKey();
 	const isDark = colorScheme === 'dark';
 	const themeStyles = isDark ? darkStyles : lightStyles;
 
@@ -114,6 +116,7 @@ export default function ListView<T extends any>({
 				refreshControl={
 					onRefresh ? (
 						<RefreshControl
+							key={refreshKey}
 							refreshing={refreshing ?? false}
 							onRefresh={onRefresh}
 							tintColor={Colors[colorScheme].tint}
@@ -139,6 +142,7 @@ export default function ListView<T extends any>({
 			refreshControl={
 				onRefresh ? (
 					<RefreshControl
+						key={refreshKey}
 						refreshing={refreshing ?? false}
 						onRefresh={onRefresh}
 						tintColor={Colors[colorScheme].tint}

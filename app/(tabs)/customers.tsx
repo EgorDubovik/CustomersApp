@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/context/AuthContext';
 import { API_URL } from '@/constants/Config';
 import { useColorScheme } from '@/components/useColorScheme';
+import { useRefreshControlKey } from '@/hooks/useRefreshControlKey';
 import Colors from '@/constants/Colors';
 
 interface ICustomer {
@@ -103,6 +104,7 @@ export default function CustomersScreen() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const [refreshing, setRefreshing] = useState(false);
+  const refreshKey = useRefreshControlKey();
   const abortControllerRef = useRef<AbortController | null>(null);
   const searchRef = useRef('');
   searchRef.current = searchQuery;
@@ -326,7 +328,7 @@ export default function CustomersScreen() {
             renderItem={renderItem}
             contentContainerStyle={styles.flatListContent}
             keyboardDismissMode="on-drag"
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors[colorScheme].tint} />}
+            refreshControl={<RefreshControl key={refreshKey} refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors[colorScheme].tint} />}
           />
         )}
       </View>

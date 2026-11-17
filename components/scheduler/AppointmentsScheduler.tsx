@@ -9,6 +9,7 @@ import DaysRow from './components/DaysRow';
 import TimesCol from './components/TimesCol';
 import SchedulerHeader from './components/SchedulerHeader';
 import { useColorScheme } from '@/components/useColorScheme';
+import { useRefreshControlKey } from '@/hooks/useRefreshControlKey';
 
 const VIEW_TYPE_STORAGE_KEY = 'scheduler_view_type';
 const VALID_VIEW_TYPES: ViewType[] = ['week', 'day', 'list'];
@@ -41,6 +42,7 @@ export default function AppointmentsScheduler<T extends any>(props: Appointments
 
 	const { width: screenWidth } = useWindowDimensions();
 	const colorScheme = useColorScheme();
+	const refreshKey = useRefreshControlKey();
 	const isDark = colorScheme === 'dark';
 	const themeStyles = isDark ? darkStyles : lightStyles;
 
@@ -272,6 +274,7 @@ export default function AppointmentsScheduler<T extends any>(props: Appointments
 					refreshControl={
 						onRefresh ? (
 							<RefreshControl
+								key={refreshKey}
 								refreshing={refreshing ?? false}
 								onRefresh={onRefresh}
 								tintColor={isDark ? '#805dca' : '#4361ee'}

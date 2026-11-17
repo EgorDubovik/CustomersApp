@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import { useColorScheme } from '@/components/useColorScheme';
+import { useRefreshControlKey } from '@/hooks/useRefreshControlKey';
 import ChatAvatar from '@/components/chat/ChatAvatar';
 import { conversationTitle, listTime, makeNameLookup, messagePreview } from '@/components/chat/helpers';
 import { sortConversations } from '@/components/chat/reducer';
@@ -22,6 +23,7 @@ export default function ChatListScreen() {
   const { state, myUserId, api, upsertConversation } = useChat();
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const refreshKey = useRefreshControlKey();
 
   const conversations = useMemo(() => {
     const all = sortConversations(state.conversations);
@@ -116,7 +118,7 @@ export default function ChatListScreen() {
           keyExtractor={(item) => String(item.id)}
           renderItem={renderItem}
           keyboardDismissMode="on-drag"
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={c.primary} />}
+          refreshControl={<RefreshControl key={refreshKey} refreshing={refreshing} onRefresh={refresh} tintColor={c.primary} />}
           contentContainerStyle={{ paddingBottom: 24, flexGrow: 1 }}
           ListEmptyComponent={
             <View style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: 32, gap: 8 }}>

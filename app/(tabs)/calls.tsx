@@ -7,6 +7,7 @@ import { API_URL } from '@/constants/Config';
 import { useAuth } from '@/context/AuthContext';
 import { useSocket, useSocketEvent } from '@/context/SocketContext';
 import { useColorScheme } from '@/components/useColorScheme';
+import { useRefreshControlKey } from '@/hooks/useRefreshControlKey';
 import CallsSettingsModal, { phoneKey } from '@/components/calls/CallsSettingsModal';
 import ConversationItem from '@/components/calls/ConversationItem';
 import * as storage from '@/utils/storage';
@@ -29,6 +30,7 @@ export default function CallsScreen() {
   const [conversations, setConversations] = useState<IConversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const refreshKey = useRefreshControlKey();
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
@@ -256,7 +258,7 @@ export default function CallsScreen() {
           )}
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 24 }}
           keyboardDismissMode="on-drag"
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchPage(1, appliedSearch, 'refresh')} tintColor={c.primary} />}
+          refreshControl={<RefreshControl key={refreshKey} refreshing={refreshing} onRefresh={() => fetchPage(1, appliedSearch, 'refresh')} tintColor={c.primary} />}
           onEndReached={loadMore}
           onEndReachedThreshold={0.4}
           ListEmptyComponent={
