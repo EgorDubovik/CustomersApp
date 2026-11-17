@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { isPushSupported, registerPushToken, routeForNotification } from '../utils/pushNotifications';
+import { getActiveChatConversation, isPushSupported, registerPushToken, routeForNotification } from '../utils/pushNotifications';
 
 /**
  * Wires push notifications into the signed-in app:
@@ -40,6 +40,20 @@ export function usePushNotifications() {
     handledResponseId.current = id;
 
     const route = routeForNotification(lastResponse.notification.request.content.data);
-    if (route) router.push(route as any);
+    if (!route) return;
+
+    const chat = route.match(/^\/chat\/(\d+)$/);
+    if (chat) {
+      // Already reading this chat (the phone just slept on it) — the message is
+      // on screen, opening it again would stack a second copy of the thread.
+      if (Number(chat[1]) === getActiveChatConversation()) return;
+      // Like any messenger: the thread sits on top of the chat list, so Back
+      // goes to the list, not to whatever screen happened to be open before.
+      router.dismissTo('/(tabs)/chat' as any);
+      router.push(route as any);
+      return;
+    }
+
+    router.push(route as any);
   }, [lastResponse, isLoading, token]);
 }

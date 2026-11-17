@@ -29,6 +29,10 @@ export function setActiveChatConversation(id: number | null): void {
   activeChatConversationId = id;
 }
 
+export function getActiveChatConversation(): number | null {
+  return activeChatConversationId;
+}
+
 /** `/chat/12` → 12 */
 function chatIdFromLink(link: unknown): number | null {
   const match = typeof link === 'string' ? link.match(/^\/chat\/(\d+)/) : null;
