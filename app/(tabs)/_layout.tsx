@@ -7,10 +7,12 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 import { useAuth } from '@/context/AuthContext';
 import { useSocketEvent } from '@/context/SocketContext';
+import { useChat } from '@/context/ChatContext';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { isStaff, callsUnread, setCallsUnread } = useAuth();
+  const { unread: chatUnread } = useChat();
 
   // Backend pushes the company-wide total whenever something is read or arrives
   useSocketEvent<{ total: number }>('conversation.unread', ({ total }) => {
@@ -104,6 +106,26 @@ export default function TabLayout() {
                 )}
               </Pressable>
             </Link>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: 'Chat',
+          // Own header with the search and the "new chat" button
+          headerShown: false,
+          tabBarBadge: chatUnread > 0 ? (chatUnread > 99 ? '99+' : chatUnread) : undefined,
+          tabBarIcon: ({ color, focused }) => (
+            <SymbolView
+              name={{
+                ios: focused ? 'bubble.left.and.bubble.right.fill' : 'bubble.left.and.bubble.right',
+                android: 'forum',
+                web: 'forum',
+              }}
+              tintColor={color}
+              size={24}
+            />
           ),
         }}
       />

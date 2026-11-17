@@ -19,17 +19,38 @@ const STORAGE_KEY = 'push_token';
 /** Remote push doesn't exist on web; the app's web build simply skips all of it. */
 export const isPushSupported = Platform.OS === 'ios' || Platform.OS === 'android';
 
+/**
+ * The internal chat open on screen right now (ChatContext keeps it current). A push
+ * about that very chat only plays its sound: the message is already in front of you.
+ */
+let activeChatConversationId: number | null = null;
+
+export function setActiveChatConversation(id: number | null): void {
+  activeChatConversationId = id;
+}
+
+/** `/chat/12` → 12 */
+function chatIdFromLink(link: unknown): number | null {
+  const match = typeof link === 'string' ? link.match(/^\/chat\/(\d+)/) : null;
+  return match ? Number(match[1]) : null;
+}
+
 // Show notifications while the app is in the foreground too: a missed call
 // shouldn't go unnoticed just because the dispatcher has another screen open.
 // Without a handler iOS drops foreground notifications silently.
 if (isPushSupported) {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
+    handleNotification: async (notification) => {
+      const data = notification.request.content.data;
+      const chatId = data?.event === 'chat.message' ? chatIdFromLink(data.link) : null;
+      const inOpenChat = chatId !== null && chatId === activeChatConversationId;
+      return {
+        shouldShowBanner: !inOpenChat,
+        shouldShowList: !inOpenChat,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      };
+    },
   });
 }
 
@@ -138,6 +159,10 @@ export function routeForNotification(data: Record<string, unknown> | undefined):
 
   const conversation = link.match(/^\/calls\/([^/?#]+)/);
   if (conversation) return `/conversation/${conversation[1]}`;
+
+  // Internal chat message — the same path in the app
+  const chatId = chatIdFromLink(link);
+  if (chatId !== null) return `/chat/${chatId}`;
 
   // New job / rescheduled job — the app has the same path for the appointment screen
   const appointment = link.match(/^\/appointment\/(\d+)/);

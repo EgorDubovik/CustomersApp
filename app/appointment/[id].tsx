@@ -28,6 +28,7 @@ import Animated, { FadeInDown, runOnJS, useAnimatedScrollHandler, useAnimatedSty
 // Subcomponents and Assets
 import { PulsingDot } from '@/components/appointment/AppointmentUI';
 import AppointmentTabBar, { TabDef } from '@/components/appointment/tabs/AppointmentTabBar';
+import ChatEntityButton from '@/components/chat/ChatEntityButton';
 import InfoTab from '@/components/appointment/tabs/InfoTab';
 import NotesTab from '@/components/appointment/tabs/NotesTab';
 import PhotosTab from '@/components/appointment/tabs/PhotosTab';
@@ -613,18 +614,26 @@ export default function AppointmentDetailsScreen() {
                     </Animated.View>
                   )}
 
-                  {/* Back button */}
-                  <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [styles.heroBackBtn, pressed && { opacity: 0.7 }]}
-                    hitSlop={12}
-                  >
-                    <SymbolView
-                      name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                      size={18}
-                      tintColor="#ffffff"
+                  {/* Back button; on the right — this appointment in the staff chat */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Pressable
+                      onPress={() => router.back()}
+                      style={({ pressed }) => [styles.heroBackBtn, pressed && { opacity: 0.7 }]}
+                      hitSlop={12}
+                    >
+                      <SymbolView
+                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+                        size={18}
+                        tintColor="#ffffff"
+                      />
+                    </Pressable>
+                    <ChatEntityButton
+                      entity={{ type: 'appointment', id: appointment.id }}
+                      suggestedUserIds={appointment.techs?.map((t) => t.id) ?? []}
+                      tint="#ffffff"
+                      background="rgba(255,255,255,0.2)"
                     />
-                  </Pressable>
+                  </View>
 
                   {/* Customer Name */}
                   <Text style={styles.heroCustomerName}>{customerName}</Text>

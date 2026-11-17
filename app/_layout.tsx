@@ -10,6 +10,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { VoipCallsProvider } from '@/components/VoipCallsProvider';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { SocketProvider } from '@/context/SocketContext';
+import { ChatProvider } from '@/context/ChatContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { useAppStateActive } from '@/hooks/useAppStateActive';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
@@ -55,9 +56,11 @@ export default function RootLayout() {
       <SettingsProvider>
         <AuthProvider>
           <SocketProvider>
-            <VoipCallsProvider>
-              <RootLayoutNav />
-            </VoipCallsProvider>
+            <ChatProvider>
+              <VoipCallsProvider>
+                <RootLayoutNav />
+              </VoipCallsProvider>
+            </ChatProvider>
           </SocketProvider>
         </AuthProvider>
       </SettingsProvider>

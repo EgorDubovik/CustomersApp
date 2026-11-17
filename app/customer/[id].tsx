@@ -16,6 +16,7 @@ import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import ChatEntityButton from '@/components/chat/ChatEntityButton';
 import { API_URL } from '@/constants/Config';
 import { useColorScheme } from '@/components/useColorScheme';
 import { formatDate } from '@/components/scheduler/utils/TimeHelper';
@@ -321,6 +322,8 @@ export default function CustomerDetailsScreen() {
           headerBackButtonDisplayMode: 'minimal',
           headerBackTitle: '',
           headerRight: () => (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <ChatEntityButton entity={{ type: 'customer', id: Number(customer.id) }} tint={c.primary} />
             <Pressable
               onPress={() => {
                 router.push({
@@ -338,6 +341,7 @@ export default function CustomerDetailsScreen() {
             >
               <Text style={{ color: c.primary, fontSize: 16, fontWeight: '600' }}>Edit</Text>
             </Pressable>
+            </View>
           ),
         }}
       />
