@@ -1,10 +1,10 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { SymbolView, SymbolViewProps } from 'expo-symbols';
-import { CompanyPhone } from '@/context/AuthContext';
+import { CompanyPhone, useAuth } from '@/context/AuthContext';
 import { callsPalette, callsStyles as styles } from './styles';
 import { IConversation } from './types';
-import { formatCallDuration, formatConversationDate, formatPhoneNumber, getBusinessNumberFromCall, getCustomerPhoneFromCall, getLastSmsIfNewer, getMatchedCompanyPhone } from './helpers';
+import { formatCallDuration, formatConversationDate, formatPhoneNumber, getBusinessNumberFromCall, getCustomerPhoneFromCall, getEmployeeByPhone, getLastSmsIfNewer, getMatchedCompanyPhone } from './helpers';
 
 interface Props {
   conv: IConversation;
@@ -15,6 +15,7 @@ interface Props {
 
 export default function ConversationItem({ conv, companyPhones, isDark, onPress }: Props) {
   const c = isDark ? callsPalette.dark : callsPalette.light;
+  const { companyEmployees } = useAuth();
   const lastCall = conv.last_call;
   const lastSms = getLastSmsIfNewer(conv);
   const unread = conv.unread_count ?? 0;
@@ -29,10 +30,12 @@ export default function ConversationItem({ conv, companyPhones, isDark, onPress 
   const statusLabel = hasVoicemail ? 'Missed · voicemail' : isMissedIncoming ? 'Missed' : isNoAnswer ? 'No answer' : isIncoming ? 'Incoming' : 'Outgoing';
 
   const customerPhone = lastCall ? getCustomerPhoneFromCall(lastCall) : conv.customer_phone ?? '';
-  const displayName = conv.customer?.name || formatPhoneNumber(customerPhone);
+  // Номер техника важнее карточки клиента: говорим с ним как с сотрудником
+  const employee = getEmployeeByPhone(customerPhone, companyEmployees);
+  const displayName = employee?.name || conv.customer?.name || formatPhoneNumber(customerPhone);
   const businessRaw = getBusinessNumberFromCall(lastCall) || conv.company_phone || '';
   const matched = getMatchedCompanyPhone(businessRaw, companyPhones);
-  const secondaryPhone = conv.customer ? formatPhoneNumber(customerPhone) : formatPhoneNumber(businessRaw);
+  const secondaryPhone = employee || conv.customer ? formatPhoneNumber(customerPhone) : formatPhoneNumber(businessRaw);
 
   let icon: SymbolViewProps['name'];
   if (lastSms) {
@@ -60,9 +63,12 @@ export default function ConversationItem({ conv, companyPhones, isDark, onPress 
     >
       {/* Row 1: name + time */}
       <View style={styles.convRow}>
-        <Text style={[styles.convName, { color: conv.customer ? c.primary : c.text, fontWeight: hasUnread ? '800' : '700' }]} numberOfLines={1}>
-          {displayName || 'Unknown'}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+          {employee && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: employee.color || '#888' }} />}
+          <Text style={[styles.convName, { flexShrink: 1, color: conv.customer && !employee ? c.primary : c.text, fontWeight: hasUnread ? '800' : '700' }]} numberOfLines={1}>
+            {displayName || 'Unknown'}
+          </Text>
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           {hasUnread && (
             <View style={[styles.unreadBadge, { backgroundColor: c.danger }]}>

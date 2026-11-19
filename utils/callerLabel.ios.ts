@@ -1,5 +1,6 @@
 import { CallKit, callKitCoordinator, type Call } from '@telnyx/react-voice-commons-sdk';
 import { API_URL } from '../constants/Config';
+import { getEmployeeByPhone } from '../components/calls/helpers';
 
 /**
  * Что показать на системном экране входящего (CallKit).
@@ -62,7 +63,11 @@ export async function findCustomerName(number: string, authToken: string): Promi
  * только если есть сессия: если приложение разбудил пуш при заблокированном
  * телефоне, хранилище с токеном может быть ещё недоступно — тогда останется номер.
  */
-export async function labelIncomingCall(call: Call, authToken: string | null): Promise<void> {
+export async function labelIncomingCall(
+  call: Call,
+  authToken: string | null,
+  employees: { name: string; phone?: string | null }[] = [],
+): Promise<void> {
   const number = customerNumberOf(call);
   if (!number) return;
 
@@ -71,6 +76,14 @@ export async function labelIncomingCall(call: Call, authToken: string | null): P
 
   const formatted = formatPhoneForDisplay(number);
   await CallKit.updateCall(uuid, formatted, formatted).catch(() => false);
+
+  // Звонит свой техник — помечаем, чтобы не спутать с клиентом. Сотрудники уже
+  // лежат в приложении, сеть для этого не нужна.
+  const employee = getEmployeeByPhone(number, employees);
+  if (employee) {
+    await CallKit.updateCall(uuid, `${employee.name} (tech)`, formatted).catch(() => false);
+    return;
+  }
 
   if (!authToken) return;
 

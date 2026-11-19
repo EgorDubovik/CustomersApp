@@ -18,7 +18,7 @@ import SmsItem from '@/components/calls/SmsItem';
 import TranscriptionModal from '@/components/calls/TranscriptionModal';
 import { callsPalette, callsStyles as styles } from '@/components/calls/styles';
 import { ICall, ICallComment, IConversation, ISmsMessage, TimelineItem } from '@/components/calls/types';
-import { applyConversationRead, formatPhoneNumber, getCompanyPhone, getCustomerPhone, getMatchedCompanyPhone, isSameDay, mergeCallIntoConversation, mergeSmsIntoConversation } from '@/components/calls/helpers';
+import { applyConversationRead, formatPhoneNumber, getCompanyPhone, getCustomerPhone, getEmployeeByPhone, getMatchedCompanyPhone, isSameDay, mergeCallIntoConversation, mergeSmsIntoConversation } from '@/components/calls/helpers';
 
 const PAGE_SIZE = 15;
 
@@ -31,7 +31,7 @@ export default function ConversationScreen() {
   const scrolledToFocusRef = useRef<string | null>(null);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { token, companyPhones } = useAuth();
+  const { token, companyPhones, companyEmployees } = useAuth();
   const { reconnectCount } = useSocket();
   const { showToast } = useToast();
   const isDark = useColorScheme() === 'dark';
@@ -176,8 +176,10 @@ export default function ConversationScreen() {
   const customerPhone = getCustomerPhone(conversation);
   const companyPhone = getCompanyPhone(conversation);
   const matched = getMatchedCompanyPhone(companyPhone, companyPhones);
-  const customer = conversation?.customer ?? null;
-  const title = customer?.name || formatPhoneNumber(customerPhone) || 'Conversation';
+  // На линии может быть наш техник — тогда это не клиент: ни ссылки на карточку, ни «Create customer»
+  const employee = getEmployeeByPhone(customerPhone, companyEmployees);
+  const customer = employee ? null : conversation?.customer ?? null;
+  const title = employee?.name || customer?.name || formatPhoneNumber(customerPhone) || 'Conversation';
 
   const copyPhone = () => {
     if (!customerPhone) return;
@@ -273,12 +275,15 @@ export default function ConversationScreen() {
             disabled={!conversation}
             style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.6 }]}
           >
-            <Text style={{ fontSize: 18, fontWeight: '800', color: customer ? c.primary : c.text }} numberOfLines={1}>
-              {loading ? 'Loading…' : title}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              {!loading && employee && <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: employee.color || '#888' }} />}
+              <Text style={{ flexShrink: 1, fontSize: 18, fontWeight: '800', color: customer ? c.primary : c.text }} numberOfLines={1}>
+                {loading ? 'Loading…' : title}
+              </Text>
+            </View>
             {!!conversation && (
               <Text style={{ fontSize: 12, color: c.textMuted }} numberOfLines={1}>
-                {customer && customerPhone ? `${formatPhoneNumber(customerPhone)}  ·  ` : ''}
+                {(customer || employee) && customerPhone ? `${formatPhoneNumber(customerPhone)}  ·  ` : ''}
                 {conversation.calls_count} {conversation.calls_count === 1 ? 'call' : 'calls'}
               </Text>
             )}
@@ -363,7 +368,7 @@ export default function ConversationScreen() {
           isDark={isDark}
           conversationId={conversation.id}
           companyPhone={matched ?? null}
-          recipientLabel={customer?.name || formatPhoneNumber(customerPhone) || undefined}
+          recipientLabel={employee?.name || customer?.name || formatPhoneNumber(customerPhone) || undefined}
           onSent={(message) => setConversation((prev) => (prev ? mergeSmsIntoConversation(prev, message) : prev))}
         />
       )}
