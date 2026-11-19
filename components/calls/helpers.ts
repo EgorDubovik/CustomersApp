@@ -53,6 +53,17 @@ export const getMatchedCompanyPhone = (raw: string, companyPhones: CompanyPhone[
   }) ?? null;
 };
 
+/**
+ * Сотрудник, которому принадлежит номер. Через номера компании диспетчер говорит
+ * и с техниками — такого собеседника показываем по имени сотрудника, а не как клиента.
+ * Сравниваем последние 10 цифр, как и номера компании.
+ */
+export const getEmployeeByPhone = <T extends { phone?: string | null }>(phone: string | null | undefined, employees: T[]): T | null => {
+  const clean = (phone ?? '').replace(/\D/g, '').slice(-10);
+  if (clean.length < 10) return null;
+  return employees.find((e) => (e.phone ?? '').replace(/\D/g, '').slice(-10) === clean) ?? null;
+};
+
 /** The conversation may have ended with a text rather than a call — then the row shows the text */
 export const getLastSmsIfNewer = (conv: IConversation | null | undefined): ISmsMessage | null => {
   const lastMessage = conv?.last_message;

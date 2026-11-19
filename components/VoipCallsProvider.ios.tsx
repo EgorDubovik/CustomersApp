@@ -15,9 +15,11 @@ import { keepConnectedWhileActive, startVoipCalls, voipClient } from '../utils/v
  * (звонок тогда приходит пушем), на переднем плане подключается снова.
  */
 export function VoipCallsProvider({ children }: { children: React.ReactNode }) {
-  const { token, isStaff } = useAuth();
+  const { token, isStaff, companyEmployees } = useAuth();
   const tokenRef = useRef(token);
   tokenRef.current = token;
+  const employeesRef = useRef(companyEmployees);
+  employeesRef.current = companyEmployees;
 
   useEffect(() => {
     if (!token || !isStaff) return;
@@ -44,7 +46,7 @@ export function VoipCallsProvider({ children }: { children: React.ReactNode }) {
     const subscription = voipClient.activeCall$.subscribe((call) => {
       if (!call?.isIncoming || labelled.current.has(call.callId)) return;
       labelled.current.add(call.callId);
-      labelIncomingCall(call, tokenRef.current).catch((e) => console.warn('[voip] Could not label the call', e));
+      labelIncomingCall(call, tokenRef.current, employeesRef.current).catch((e) => console.warn('[voip] Could not label the call', e));
     });
     return () => subscription.unsubscribe();
   }, []);
