@@ -10,6 +10,7 @@ import AudioPlayer from './AudioPlayer';
 import { callsPalette, callsStyles as styles } from './styles';
 import { ICall, ICallComment } from './types';
 import { formatCallDuration, formatClock } from './helpers';
+import { renderMentions } from '@/utils/mentions';
 
 const ROLE_ADMIN = 1;
 
@@ -218,7 +219,7 @@ export default function CallItem({ call, isDark, onCommentsChange, onShowTranscr
                   <Text style={{ fontWeight: '700', color: c.textSecondary }}>{cm.user?.name}</Text>
                   {'  '}{formatDate(cm.created_at, 'MMM DD, h:mm A')}
                 </Text>
-                <Text style={{ fontSize: 13, color: c.text, marginTop: 2 }}>{cm.comment}</Text>
+                <Text style={{ fontSize: 13, color: c.text, marginTop: 2 }}>{renderMentions(cm.comment, '#4361ee')}</Text>
               </View>
               {canDeleteComment(cm) && (
                 <Pressable onPress={() => deleteComment(cm)} hitSlop={8} disabled={deletingId === cm.id}>
