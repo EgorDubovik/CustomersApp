@@ -161,8 +161,19 @@ export function routeForNotification(data: Record<string, unknown> | undefined):
   const link = typeof data?.link === 'string' ? data.link : null;
   if (!link) return null;
 
-  const conversation = link.match(/^\/calls\/([^/?#]+)/);
-  if (conversation) return `/conversation/${conversation[1]}`;
+  // A comment mention also carries ?item=call:<id>&comment=<id> — the screen jumps to that comment
+  const conversation = link.match(/^\/calls\/([^/?#]+)(\?[^#]*)?/);
+  if (conversation) {
+    // Parsed by hand: React Native's URLSearchParams has no working get()
+    const param = (name: string) => {
+      const match = (conversation[2] ?? '').match(new RegExp(`[?&]${name}=([^&]*)`));
+      return match ? decodeURIComponent(match[1]) : null;
+    };
+    const item = param('item');
+    const comment = param('comment');
+    if (!item) return `/conversation/${conversation[1]}`;
+    return `/conversation/${conversation[1]}?item=${encodeURIComponent(item)}${comment ? `&comment=${encodeURIComponent(comment)}` : ''}`;
+  }
 
   // Internal chat message — the same path in the app
   const chatId = chatIdFromLink(link);

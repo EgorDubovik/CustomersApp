@@ -1,24 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { formatDate } from '@/components/scheduler/utils/TimeHelper';
-import { API_URL } from '@/constants/Config';
-import { useAuth } from '@/context/AuthContext';
-import { useToast } from '@/context/ToastContext';
-import { getInitials } from '@/components/appointment/tabs/shared';
 import AudioPlayer from './AudioPlayer';
 import { callsPalette, callsStyles as styles } from './styles';
 import { ICall, ICallComment } from './types';
 import { formatCallDuration, formatClock } from './helpers';
-import { renderMentions } from '@/utils/mentions';
+import CommentsPanel from './CommentsPanel';
 
-const ROLE_ADMIN = 1;
 
 interface Props {
   call: ICall;
   isDark: boolean;
   onCommentsChange: (call: ICall, comments: ICallComment[]) => void;
   onShowTranscription: (callId: string) => void;
+  /** Opened from a push / Mentions: comments start open and this one is highlighted */
+  focusKey?: string | null;
+  focusCommentId?: string | null;
 }
 
 /** Seconds since `since`, ticking once a second while `enabled` */
@@ -34,16 +32,18 @@ const useElapsedSeconds = (since: string | null | undefined, enabled: boolean) =
   return seconds;
 };
 
-export default function CallItem({ call, isDark, onCommentsChange, onShowTranscription }: Props) {
+export default function CallItem({ call, isDark, onCommentsChange, onShowTranscription, focusKey, focusCommentId }: Props) {
   const c = isDark ? callsPalette.dark : callsPalette.light;
-  const { token, user } = useAuth();
-  const { showToast } = useToast();
 
   const [showSummary, setShowSummary] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  const [comment, setComment] = useState('');
-  const [sending, setSending] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Jumped here from a push / Mentions → open the comments
+  useEffect(() => {
+    if (!focusKey) return;
+    setShowSummary(false);
+    setShowComments(true);
+  }, [focusKey]);
 
   const isOutgoing = call.direction === 'outgoing';
   const isCompleted = call.status === 'completed';
@@ -69,53 +69,6 @@ export default function CallItem({ call, isDark, onCommentsChange, onShowTranscr
   const bubbleText = isOutgoing ? c.bubbleOutText : c.bubbleInText;
   const bubbleMuted = isOutgoing ? 'rgba(255,255,255,0.75)' : c.textMuted;
   const trackColor = isOutgoing ? 'rgba(255,255,255,0.28)' : isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)';
-
-  const canDeleteComment = (cm: ICallComment) => !!user && (user.roles_ids?.includes(ROLE_ADMIN) || String(user.id) === String(cm.user_id));
-
-  const sendComment = async () => {
-    const text = comment.trim();
-    if (!text || sending || !token) return;
-    setSending(true);
-    try {
-      const r = await fetch(`${API_URL}/calls/comment/${call.id}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ comment: text }),
-      });
-      if (!r.ok) throw new Error(`Server returned status code ${r.status}`);
-      onCommentsChange(call, await r.json());
-      setComment('');
-    } catch (err: any) {
-      console.error(err);
-      Alert.alert('Error', err.message || 'Failed to add comment.');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const deleteComment = (cm: ICallComment) => {
-    if (!token) return;
-    Alert.alert('Delete comment', 'Are you sure you want to delete this comment?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setDeletingId(cm.id);
-          try {
-            const r = await fetch(`${API_URL}/calls/comment/${cm.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
-            if (!r.ok) throw new Error(`Server returned status code ${r.status}`);
-            onCommentsChange(call, await r.json());
-          } catch (err: any) {
-            console.error(err);
-            Alert.alert('Error', err.message || 'Failed to delete comment.');
-          } finally {
-            setDeletingId(null);
-          }
-        },
-      },
-    ]);
-  };
 
   return (
     // Column: bubble row on top, comments panel (full width) below. While the panel is
@@ -207,41 +160,14 @@ export default function CallItem({ call, isDark, onCommentsChange, onShowTranscr
 
       {/* ─── Comments panel — full width below the bubble ─── */}
       {showComments && (
-        <View style={[styles.summaryBox, { backgroundColor: c.card, borderColor: c.cardBorder, marginTop: 4 }]}>
-          {(call.comments || []).length === 0 && <Text style={{ fontSize: 12, fontStyle: 'italic', color: c.textMuted }}>No comments yet.</Text>}
-          {(call.comments || []).map((cm) => (
-            <View key={cm.id} style={[styles.commentItem, { backgroundColor: c.noteBg }]}>
-              <View style={[styles.commentAvatar, { backgroundColor: cm.user?.color || c.primary }]}>
-                <Text style={{ fontSize: 9, fontWeight: '800', color: '#fff' }}>{getInitials(cm.user?.name || 'U')}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 11, color: c.textMuted }}>
-                  <Text style={{ fontWeight: '700', color: c.textSecondary }}>{cm.user?.name}</Text>
-                  {'  '}{formatDate(cm.created_at, 'MMM DD, h:mm A')}
-                </Text>
-                <Text style={{ fontSize: 13, color: c.text, marginTop: 2 }}>{renderMentions(cm.comment, '#4361ee')}</Text>
-              </View>
-              {canDeleteComment(cm) && (
-                <Pressable onPress={() => deleteComment(cm)} hitSlop={8} disabled={deletingId === cm.id}>
-                  {deletingId === cm.id ? <ActivityIndicator size="small" color={c.danger} /> : <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} size={14} tintColor={c.danger} />}
-                </Pressable>
-              )}
-            </View>
-          ))}
-          <View style={styles.commentInputRow}>
-            <TextInput
-              value={comment}
-              onChangeText={setComment}
-              placeholder="Type comment here…"
-              placeholderTextColor={c.textFaint}
-              multiline
-              style={[styles.commentInput, { backgroundColor: c.inputBg, borderColor: c.cardBorder, color: c.text }]}
-            />
-            <Pressable onPress={sendComment} disabled={sending || !comment.trim()} style={({ pressed }) => [styles.commentSendBtn, { backgroundColor: comment.trim() ? c.primary : c.inputBg }, pressed && { opacity: 0.8 }]}>
-              {sending ? <ActivityIndicator size="small" color="#fff" /> : <SymbolView name={{ ios: 'paperplane.fill', android: 'send', web: 'send' }} size={14} tintColor={comment.trim() ? '#fff' : c.textMuted} />}
-            </Pressable>
-          </View>
-        </View>
+        <CommentsPanel
+          itemType="call"
+          itemId={call.id}
+          comments={call.comments || []}
+          onCommentsChange={(comments) => onCommentsChange(call, comments)}
+          isDark={isDark}
+          highlightCommentId={focusCommentId}
+        />
       )}
     </View>
   );

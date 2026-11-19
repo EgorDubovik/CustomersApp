@@ -20,7 +20,7 @@ const PER_PAGE = 20;
 const HIDDEN_PHONES_KEY = 'calls_hidden_company_phones';
 
 export default function CallsScreen() {
-  const { token, companyPhones } = useAuth();
+  const { token, companyPhones, mentionsUnread } = useAuth();
   const { reconnectCount } = useSocket();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -206,6 +206,20 @@ export default function CallsScreen() {
               <SymbolView name={{ ios: 'phone.fill', android: 'call', web: 'call' }} size={18} tintColor="#fff" />
             </Pressable>
           )}
+          {/* Mentions: comments where I was @mentioned or got a reply — badge = unread */}
+          <Pressable
+            onPress={() => router.push('/mentions' as any)}
+            hitSlop={8}
+            accessibilityLabel="Mentions"
+            style={({ pressed }) => [styles.headerIconBtn, { backgroundColor: mentionsUnread ? c.primaryMuted : c.card }, pressed && { opacity: 0.6 }]}
+          >
+            <SymbolView name={{ ios: 'at', android: 'alternate_email', web: 'alternate_email' }} size={19} tintColor={mentionsUnread ? c.primary : c.textMuted} />
+            {mentionsUnread > 0 && (
+              <View style={[styles.headerIconBadge, { backgroundColor: c.danger }]}>
+                <Text style={{ fontSize: 9, fontWeight: '800', color: '#fff' }}>{mentionsUnread > 99 ? '99+' : mentionsUnread}</Text>
+              </View>
+            )}
+          </Pressable>
           <Pressable onPress={() => setSettingsVisible(true)} hitSlop={8} style={({ pressed }) => [styles.headerIconBtn, { backgroundColor: hiddenPhones.size ? c.primaryMuted : c.card }, pressed && { opacity: 0.6 }]}>
             <SymbolView name={{ ios: 'line.3.horizontal.decrease.circle', android: 'filter_list', web: 'filter_list' }} size={20} tintColor={hiddenPhones.size ? c.primary : c.textMuted} />
             {hiddenPhones.size > 0 && (

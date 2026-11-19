@@ -23,7 +23,12 @@ import { applyConversationRead, formatPhoneNumber, getCompanyPhone, getCustomerP
 const PAGE_SIZE = 15;
 
 export default function ConversationScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // item/comment: opened from a push or Mentions — jump to that call/SMS and its comment
+  const { id, item: focusItem, comment: focusComment } = useLocalSearchParams<{ id: string; item?: string; comment?: string }>();
+  const [focusType, focusId] = typeof focusItem === 'string' ? focusItem.split(':') : [];
+  const focus = focusId && (focusType === 'call' || focusType === 'sms') ? { type: focusType as 'call' | 'sms', id: focusId, commentId: focusComment ?? null, key: `${focusItem}:${focusComment ?? ''}` } : null;
+  const listRef = useRef<FlatList<TimelineItem>>(null);
+  const scrolledToFocusRef = useRef<string | null>(null);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { token, companyPhones } = useAuth();
@@ -67,6 +72,8 @@ export default function ConversationScreen() {
       setError('');
       try {
         const params = new URLSearchParams({ conversation_id: id, limit: String(PAGE_SIZE) });
+        // The backend widens the first page down to this call/SMS, however old it is
+        if (focusItem) params.set('focus', String(focusItem));
         const r = await fetch(`${API_URL}/calls/conversation?${params}`, { headers: authHeaders });
         if (!r.ok) throw new Error(r.status === 404 ? 'Conversation not found' : `Server returned status code ${r.status}`);
         const data = await r.json();
@@ -81,7 +88,7 @@ export default function ConversationScreen() {
         setLoading(false);
       }
     },
-    [id, token, authHeaders, markRead],
+    [id, token, authHeaders, markRead, focusItem],
   );
 
   useEffect(() => {
@@ -148,6 +155,9 @@ export default function ConversationScreen() {
   const onCommentsChange = (call: ICall, comments: ICallComment[]) => {
     setConversation((prev) => (prev ? { ...prev, calls: prev.calls?.map((x) => (x.id === call.id ? { ...x, comments } : x)) } : prev));
   };
+  const onMessageCommentsChange = (message: ISmsMessage, comments: ICallComment[]) => {
+    setConversation((prev) => (prev ? { ...prev, messages: prev.messages?.map((x) => (x.id === message.id ? { ...x, comments } : x)) } : prev));
+  };
   const onNoteDeleted = (noteId: string) => {
     setConversation((prev) => (prev ? { ...prev, conversation_notes: prev.conversation_notes?.filter((x) => x.id !== noteId) } : prev));
   };
@@ -192,6 +202,20 @@ export default function ConversationScreen() {
     }
   };
 
+  const isFocused = (item: TimelineItem) => !!focus && item.type === focus.type && item.data.id === focus.id;
+
+  // Once the timeline has the focused call/SMS, bring it to the middle of the screen (once per link)
+  useEffect(() => {
+    if (!focus || loading || scrolledToFocusRef.current === focus.key) return;
+    const index = timeline.findIndex(isFocused);
+    if (index < 0) return;
+    scrolledToFocusRef.current = focus.key;
+    // A beat for the comments panel to open before measuring
+    const t = setTimeout(() => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }), 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeline, loading, focus?.key]);
+
   const renderItem = ({ item, index }: { item: TimelineItem; index: number }) => {
     const older = timeline[index + 1];
     const showDivider = !older || !isSameDay(item.created_at, older.created_at);
@@ -204,8 +228,25 @@ export default function ConversationScreen() {
             <View style={[styles.dayDividerLine, { backgroundColor: c.divider }]} />
           </View>
         )}
-        {item.type === 'call' && <CallItem call={item.data} isDark={isDark} onCommentsChange={onCommentsChange} onShowTranscription={setTranscriptionCallId} />}
-        {item.type === 'sms' && <SmsItem message={item.data} isDark={isDark} />}
+        {item.type === 'call' && (
+          <CallItem
+            call={item.data}
+            isDark={isDark}
+            onCommentsChange={onCommentsChange}
+            onShowTranscription={setTranscriptionCallId}
+            focusKey={isFocused(item) ? focus!.key : null}
+            focusCommentId={isFocused(item) ? focus!.commentId : null}
+          />
+        )}
+        {item.type === 'sms' && (
+          <SmsItem
+            message={item.data}
+            isDark={isDark}
+            onCommentsChange={onMessageCommentsChange}
+            focusKey={isFocused(item) ? focus!.key : null}
+            focusCommentId={isFocused(item) ? focus!.commentId : null}
+          />
+        )}
         {item.type === 'note' && <NoteItem note={item.data} isDark={isDark} onDeleted={onNoteDeleted} />}
       </View>
     );
@@ -280,7 +321,13 @@ export default function ConversationScreen() {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={timeline}
+          // Rows have different heights; jump near the target first, then retry exactly
+          onScrollToIndexFailed={({ index, averageItemLength }) => {
+            listRef.current?.scrollToOffset({ offset: index * averageItemLength, animated: false });
+            setTimeout(() => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }), 120);
+          }}
           inverted
           keyExtractor={(item) => `${item.type}-${item.data.id}`}
           renderItem={renderItem}

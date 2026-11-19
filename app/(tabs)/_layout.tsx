@@ -11,13 +11,18 @@ import { useChat } from '@/context/ChatContext';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const { isStaff, callsUnread, setCallsUnread } = useAuth();
+  const { isStaff, callsUnread, setCallsUnread, mentionsUnread, setMentionsUnread } = useAuth();
   const { unread: chatUnread } = useChat();
 
   // Backend pushes the company-wide total whenever something is read or arrives
   useSocketEvent<{ total: number }>('conversation.unread', ({ total }) => {
     if (typeof total === 'number') setCallsUnread(total);
   });
+  // My own unread comment mentions — added to the Calls badge, like the web menu
+  useSocketEvent<{ total: number }>('comment.mentions_unread', ({ total }) => {
+    if (typeof total === 'number') setMentionsUnread(total);
+  });
+  const callsBadge = callsUnread + mentionsUnread;
   const activeColor = Colors[colorScheme].tint;
   const inactiveColor = Colors[colorScheme].tabIconDefault;
   const cardBg = Colors[colorScheme].card;
@@ -136,7 +141,7 @@ export default function TabLayout() {
           // Technicians don't handle the phone line — hide the tab (and its route) for them
           href: isStaff ? undefined : null,
           headerShown: false,
-          tabBarBadge: callsUnread > 0 ? (callsUnread > 99 ? '99+' : callsUnread) : undefined,
+          tabBarBadge: callsBadge > 0 ? (callsBadge > 99 ? '99+' : callsBadge) : undefined,
           tabBarIcon: ({ color, focused }) => (
             <SymbolView
               name={{
