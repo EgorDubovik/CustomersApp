@@ -80,6 +80,11 @@ interface AuthContextType {
   /** Company-wide unread calls + texts; seeded by initial-data, kept fresh by the socket */
   callsUnread: number;
   setCallsUnread: (n: number) => void;
+  /** My unread comment mentions/replies (Mentions on the Calls tab); initial-data + socket */
+  mentionsUnread: number;
+  setMentionsUnread: (n: number) => void;
+  /** Who can be @mentioned in call/SMS comments — decided by the backend (staff with access to calls) */
+  mentionableUserIds: number[];
   login: (token: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
   fetchInitialData: (token: string) => Promise<void>;
@@ -100,6 +105,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [companyPhones, setCompanyPhones] = useState<CompanyPhone[]>([]);
   const [smsDlcApproved, setSmsDlcApproved] = useState(false);
   const [callsUnread, setCallsUnread] = useState(0);
+  const [mentionsUnread, setMentionsUnread] = useState(0);
+  const [mentionableUserIds, setMentionableUserIds] = useState<number[]>([]);
 
   const fetchInitialData = async (activeToken: string) => {
     try {
@@ -142,6 +149,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await storage.setItem('company_employees', JSON.stringify(employees));
         }
         if (typeof data.callsUnread === 'number') setCallsUnread(data.callsUnread);
+        if (typeof data.mentionsUnread === 'number') setMentionsUnread(data.mentionsUnread);
+        if (Array.isArray(data.mentionableUserIds)) setMentionableUserIds(data.mentionableUserIds.map(Number));
         if (Array.isArray(data.companyPhoneNumbers)) {
           const phones: CompanyPhone[] = data.companyPhoneNumbers.map((p: any) => ({
             id: p.id,
@@ -276,6 +285,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCompanyTags([]);
       setSmsDlcApproved(false);
       setCallsUnread(0);
+      setMentionsUnread(0);
+      setMentionableUserIds([]);
     } catch (e) {
       console.error('Failed to remove auth data on logout', e);
     }
@@ -365,7 +376,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ token, user, isLoading, companySettings, companyServices, companyTags, companyEmployees, companyPhones, smsDlcApproved, isStaff, callsUnread, setCallsUnread, login, logout, fetchInitialData, updateUserSetting }}
+      value={{ token, user, isLoading, companySettings, companyServices, companyTags, companyEmployees, companyPhones, smsDlcApproved, isStaff, callsUnread, setCallsUnread, mentionsUnread, setMentionsUnread, mentionableUserIds, login, logout, fetchInitialData, updateUserSetting }}
     >
       {children}
     </AuthContext.Provider>

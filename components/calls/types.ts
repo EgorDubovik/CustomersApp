@@ -1,8 +1,10 @@
 // Mirrors frontend/src/pages/Calls/types.ts — keep the two in sync when the API changes.
 
+/** Internal staff comment on a call or an SMS; text may carry @[Name](user:ID) mentions */
 export interface ICallComment {
   id: string;
-  call_id: string;
+  call_id?: string;
+  message_id?: string;
   user_id: string | number;
   comment: string;
   created_at: string;
@@ -49,6 +51,8 @@ export interface ISmsMessage {
   status: 'received' | 'queued' | 'sent' | 'delivered' | 'failed';
   read_at: string | null;
   created_at: string;
+  /** Internal staff comments; absent in socket events */
+  comments?: ICallComment[];
 }
 
 export interface IConversationNote {
