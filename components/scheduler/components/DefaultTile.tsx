@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { formatDate } from '../utils/TimeHelper';
+import DoubleCheck from './DoubleCheck';
 import { useColorScheme } from '@/components/useColorScheme';
 
 interface DefaultTileProps {
@@ -52,6 +53,12 @@ export default function DefaultTile({ start, end, title, color = '#3b82f6', stat
 				</Text>
 			</View>
 
+			{status === 1 && (
+				<View style={styles.onMyWay}>
+					<DoubleCheck size={10} color="#ffffff" />
+				</View>
+			)}
+
 			{showPendingDot && (
 				<View style={styles.pendingDot} />
 			)}
@@ -102,6 +109,11 @@ const styles = StyleSheet.create({
 		fontSize: 9,
 		fontWeight: '500',
 		marginTop: 2,
+	},
+	onMyWay: {
+		position: 'absolute',
+		bottom: 3,
+		right: 4,
 	},
 	pendingDot: {
 		position: 'absolute',

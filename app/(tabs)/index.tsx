@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   StyleSheet,
   ActivityIndicator,
@@ -19,10 +19,26 @@ import { API_URL } from '@/constants/Config';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import AppointmentsScheduler from '@/components/scheduler/AppointmentsScheduler';
+import AppointmentListItem from '@/components/scheduler/components/AppointmentListItem';
+import { ViewType } from '@/components/scheduler/types';
+import {
+  getWeekRangeAround,
+  getWeeksBounds,
+  groupConsecutiveWeeks,
+  weekKeysBetween,
+  parseLocalDateTime,
+} from '@/components/scheduler/utils/weeks';
+import { useListPaging } from '@/hooks/useListPaging';
 
 interface ITech {
   id: number;
   name: string;
+  color: string;
+}
+
+interface ITag {
+  id: number;
+  title: string;
   color: string;
 }
 
@@ -34,8 +50,24 @@ interface IAppointment {
     name: string;
   };
   techs?: ITech[];
+  // 0 — scheduled, 1 — on my way, 2 — done
   status?: number;
+  address?: string | null;
+  paymentPending?: boolean;
+  tags?: ITag[];
+  job?: {
+    id?: number;
+    services?: { title: string }[];
+    tags?: ITag[];
+  } | null;
 }
+
+/** Склеивает списки по id: аппоинтмент на стыке недель приходит в обоих запросах */
+const mergeById = (prev: IAppointment[], incoming: IAppointment[]) => {
+  const map = new Map(prev.map((a) => [a.id, a] as const));
+  incoming.forEach((a) => map.set(a.id, a));
+  return Array.from(map.values());
+};
 
 // ─── Color Helper Utilities ──────────────────────────────────────────────────
 
@@ -181,56 +213,158 @@ export default function TabOneScreen() {
 
   const [initialDate] = useState(() => new Date());
   const [appointments, setAppointments] = useState<IAppointment[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  // Ошибка догрузки недели, когда что-то уже показано: не валим экран, а даём повторить
+  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
 
-  const fetchAppointments = async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
+  // ─── Недельная подгрузка (как на вебе) ─────────────────────────────────────
+  // Что сейчас смотрят: шедулер сообщает дату и вид через onRangeChange.
+  const [viewState, setViewState] = useState<{ date: Date; view: ViewType }>(() => ({ date: initialDate, view: 'day' }));
+  const [loadedWeeks, setLoadedWeeks] = useState<string[]>([]);
+  const fetchingWeeksRef = useRef<Set<string>>(new Set());
+
+  const loadWeeks = async (weekKeys: string[]): Promise<IAppointment[]> => {
+    const { start, end } = getWeeksBounds(weekKeys);
+    const params = `startDate=${encodeURIComponent(start.toISOString())}&endDate=${encodeURIComponent(end.toISOString())}`;
+    const response = await fetch(`${API_URL}/appointments?${params}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Server returned status code ${response.status}`);
     }
-    setError('');
+    const data = await response.json();
+    return data.appointments || [];
+  };
 
-    try {
-      const response = await fetch(`${API_URL}/appointments`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
-      });
+  const describeError = (err: any) =>
+    err?.message === 'Network request failed'
+      ? 'Network error. Please make sure the NestJS backend is running and reachable.'
+      : err?.message || 'An error occurred while fetching appointments.';
 
-      if (!response.ok) {
-        throw new Error(`Server returned status code ${response.status}`);
+  // Недели вокруг даты — для Day/Week (List грузится сам, пачками)
+  const requiredWeekKeys = useMemo(() => {
+    const { start, end } = getWeekRangeAround(viewState.date);
+    return weekKeysBetween(start, end);
+  }, [viewState]);
+
+  useEffect(() => {
+    if (!token) return;
+    const weeksToLoad = requiredWeekKeys.filter((key) => !loadedWeeks.includes(key) && !fetchingWeeksRef.current.has(key));
+    if (weeksToLoad.length === 0) return;
+
+    weeksToLoad.forEach((key) => fetchingWeeksRef.current.add(key));
+    const isFirstLoad = loadedWeeks.length === 0;
+
+    // Подряд идущие недели — одним запросом
+    Promise.all(
+      groupConsecutiveWeeks(weeksToLoad).map(async (weekKeys) => {
+        try {
+          return { weekKeys, appointments: await loadWeeks(weekKeys), error: null };
+        } catch (err) {
+          return { weekKeys, appointments: [] as IAppointment[], error: err };
+        } finally {
+          weekKeys.forEach((key) => fetchingWeeksRef.current.delete(key));
+        }
+      })
+    ).then((results) => {
+      const ok = results.filter((r) => !r.error);
+      const failed = results.find((r) => r.error);
+
+      if (ok.length > 0) {
+        setAppointments((prev) => mergeById(prev, ok.flatMap((r) => r.appointments)));
+        setLoadedWeeks((prev) => [...prev, ...ok.flatMap((r) => r.weekKeys)]);
+        setError('');
       }
+      if (failed) {
+        console.error(failed.error);
+        if (isFirstLoad && ok.length === 0) setError(describeError(failed.error));
+        else setLoadMoreFailed(true);
+      }
+    });
+  }, [requiredWeekKeys, loadedWeeks, token, retryTick]);
 
-      const data = await response.json();
-      setAppointments(data.appointments || []);
+  const retryLoading = () => {
+    setLoadMoreFailed(false);
+    setError('');
+    setRetryTick((n) => n + 1);
+  };
+
+  // Pull-to-refresh и реконнект сокета: перечитываем все уже загруженные недели.
+  // Внутри перечитанных диапазонов заменяем данные целиком (так пропадут и удалённые).
+  const refreshLoadedWeeks = async (showSpinner: boolean) => {
+    if (loadedWeeks.length === 0) {
+      retryLoading();
+      return;
+    }
+    if (showSpinner) setRefreshing(true);
+    try {
+      // List перечитывает свой загруженный кусок целиком — позиция в списке не сбрасывается
+      if (viewState.view === 'list') await list.refresh();
+      const groups = groupConsecutiveWeeks(loadedWeeks);
+      const results = await Promise.all(groups.map((weekKeys) => loadWeeks(weekKeys)));
+      const ranges = groups.map(getWeeksBounds);
+      const inRefreshed = (a: IAppointment) => {
+        const s = new Date(a.start).getTime();
+        const e = new Date(a.end).getTime();
+        return ranges.some((r) => e >= r.start.getTime() && s <= r.end.getTime());
+      };
+      setAppointments((prev) => mergeById(prev.filter((a) => !inRefreshed(a)), results.flat()));
+      setLoadMoreFailed(false);
+      setError('');
     } catch (err: any) {
       console.error(err);
-      setError(
-        err.message === 'Network request failed'
-          ? 'Network error. Please make sure the NestJS backend is running and reachable.'
-          : err.message || 'An error occurred while fetching appointments.'
-      );
+      if (showSpinner) Alert.alert('Error', describeError(err));
     } finally {
-      setLoading(false);
       setRefreshing(false);
+      // Заодно повторяем недели, которые раньше не загрузились
+      setRetryTick((n) => n + 1);
     }
   };
 
-  useEffect(() => {
-    if (token) {
-      fetchAppointments();
-    }
-  }, [token]);
-
   // Events emitted while the socket was down (background, no network) are gone for good,
-  // so every reconnect is followed by a silent full reload of the schedule.
+  // so every reconnect is followed by a silent reload of the loaded weeks.
   useEffect(() => {
-    if (reconnectCount > 0 && token) fetchAppointments(true);
+    if (reconnectCount > 0 && token) refreshLoadedWeeks(false);
   }, [reconnectCount]);
+
+  // ─── List: keyset-пагинация в обе стороны (hooks/useListPaging) ─────────────
+  const mergeAppointments = useCallback((items: IAppointment[]) => {
+    setAppointments((prev) => mergeById(prev, items));
+  }, []);
+  const replaceRange = useCallback((from: Date | null, to: Date | null, items: IAppointment[]) => {
+    setAppointments((prev) => {
+      const inRange = (a: IAppointment) => {
+        const t = parseLocalDateTime(a.start).getTime();
+        return (!from || t >= from.getTime()) && (!to || t <= to.getTime());
+      };
+      return mergeById(prev.filter((a) => !inRange(a)), items);
+    });
+  }, []);
+  const list = useListPaging<IAppointment>({
+    token,
+    active: viewState.view === 'list',
+    date: viewState.date,
+    mergeAppointments,
+    replaceRange,
+  });
+
+  const onRangeChange = useCallback((selectedDate: Date, _start: Date, _end: Date, view: ViewType) => {
+    setViewState((prev) =>
+      prev.view === view && prev.date.getTime() === selectedDate.getTime() ? prev : { date: new Date(selectedDate), view }
+    );
+  }, []);
+
+  const renderListItem = useCallback(
+    (event: any) => (
+      <AppointmentListItem event={event} onPress={() => router.push(`/appointment/${event.id}` as any)} />
+    ),
+    [router]
+  );
 
   // ─── Real-time updates ─────────────────────────────────────────────────────
   // The payload mirrors one item of GET /appointments (customer & address hoisted to the
@@ -258,16 +392,21 @@ export default function TabOneScreen() {
     setAppointments((prev) => prev.filter((a) => a.id !== appointmentId));
   });
 
-  const mappedEvents = appointments.map((app) => ({
-    id: app.id,
-    start: app.start,
-    end: app.end,
-    title: app.customer?.name || 'Unknown Client',
-    color: getAppointmentColor(app),
-    opacity: 0.8,
-    data: app,
-  }));
+  const mappedEvents = useMemo(
+    () =>
+      appointments.map((app) => ({
+        id: app.id,
+        start: app.start,
+        end: app.end,
+        title: app.customer?.name || 'Unknown Client',
+        color: getAppointmentColor(app),
+        opacity: 0.8,
+        data: app,
+      })),
+    [appointments]
+  );
 
+  const loading = loadedWeeks.length === 0 && !error;
   // Render Loading spinner
   if (loading && !refreshing) {
     return (
@@ -293,7 +432,7 @@ export default function TabOneScreen() {
         <Text style={styles.errorTitle}>Oops! Something went wrong</Text>
         <Text style={[styles.errorSubtitle, themeStyles.textMuted]}>{error}</Text>
         <Pressable
-          onPress={() => fetchAppointments(false)}
+          onPress={retryLoading}
           style={[styles.retryBtn, themeStyles.btnBorder]}
         >
           <Text style={[styles.retryText, themeStyles.textPrimary]}>Try Again</Text>
@@ -343,13 +482,20 @@ export default function TabOneScreen() {
         defaultViewType="day"
         events={mappedEvents}
         refreshing={refreshing}
-        onRefresh={() => fetchAppointments(true)}
+        onRefresh={() => refreshLoadedWeeks(true)}
+        onRangeChange={onRangeChange}
         onClickHandler={(event) => {
           router.push(`/appointment/${event.id}` as any);
         }}
-        filterEvent={(event) => {
-          // Show only active appointments (status !== 2) in list view
-          return event.data?.status !== 2;
+        filterEvent={list.filterEvent}
+        renderListItem={renderListItem}
+        listLoading={list.loading}
+        listReached={list.reached}
+        listLoadError={loadMoreFailed || list.loadError}
+        onListLoadMore={list.loadMore}
+        onListRetry={() => {
+          retryLoading();
+          list.retry();
         }}
       />
 
