@@ -52,6 +52,19 @@ export interface AppointmentsSchedulerProps<T = any> {
 	renderListItem?: (event: CalendarEvent<T>) => React.ReactNode;
 	renderTooltip?: (event: CalendarEvent<T>) => React.ReactNode;
 	filterEvent?: (event: CalendarEvent<T>) => boolean;
+	// List view: бесконечная подгрузка в обе стороны
+	listLoading?: ListLoadingState;
+	listLoadError?: boolean;
+	// true — в эту сторону аппоинтментов больше нет, край не подгружаем
+	listReached?: ListLoadingState;
+	onListLoadMore?: (direction: ListLoadDirection) => void;
+	onListRetry?: () => void;
+}
+
+export type ListLoadDirection = 'start' | 'end';
+export interface ListLoadingState {
+	start: boolean;
+	end: boolean;
 }
 
 // ─── Internal Types ───────────────────────────────────────────────────────────
@@ -103,4 +116,12 @@ export interface ListViewProps<T = any> {
 	defaultAppointmentOpacity: number;
 	showAll?: boolean;
 	renderListItem?: (event: CalendarEvent<T>) => React.ReactNode;
+	// К какой дате прокрутиться; focusKey меняется — прокручиваемся заново
+	focusDate?: Date;
+	focusKey?: number;
+	loading?: ListLoadingState;
+	loadError?: boolean;
+	reached?: ListLoadingState;
+	onLoadMore?: (direction: ListLoadDirection) => void;
+	onRetry?: () => void;
 }

@@ -38,6 +38,11 @@ export default function AppointmentsScheduler<T extends any>(props: Appointments
 		renderListItem,
 		showCurrentTimeLine = true,
 		currentTimeLineColor = '#e4ad15',
+		listLoading,
+		listLoadError,
+		listReached,
+		onListLoadMore,
+		onListRetry,
 	} = props;
 
 	const { width: screenWidth } = useWindowDimensions();
@@ -55,6 +60,8 @@ export default function AppointmentsScheduler<T extends any>(props: Appointments
 	const [viewEndDateTime, setViewEndDateTime] = useState<Date>(new Date());
 	const [startHour, setStartHour] = useState<Date>(new Date());
 	const [endHour, setEndHour] = useState<Date>(new Date());
+	// Меняется на Today и стрелках — List заново прокручивается к currentViewDate
+	const [listFocusKey, setListFocusKey] = useState(0);
 
 	const [internalViewType, setInternalViewType] = useState<ViewType>(defaultViewType);
 	const [viewTypeLoaded, setViewTypeLoaded] = useState(false);
@@ -139,15 +146,18 @@ export default function AppointmentsScheduler<T extends any>(props: Appointments
 
 	const navigate = (delta: number) => {
 		const newDate = new Date(currentViewDate);
-		newDate.setDate(newDate.getDate() + (currentView === 'week' ? delta * 7 : delta));
+		// В List стрелки листают по неделе: список и так непрерывный, день — слишком мелкий шаг
+		newDate.setDate(newDate.getDate() + (currentView === 'day' ? delta : delta * 7));
 		setCurrentViewDate(newDate);
 		onCurrentDateChange?.(newDate);
+		setListFocusKey((key) => key + 1);
 	};
 
 	const handleTodayClick = () => {
 		const today = new Date();
 		setCurrentViewDate(today);
 		onCurrentDateChange?.(today);
+		setListFocusKey((key) => key + 1);
 	};
 
 	// Column width depends on viewType:
@@ -264,6 +274,13 @@ export default function AppointmentsScheduler<T extends any>(props: Appointments
 						onAppointmentClick={onClickHandler}
 						refreshing={refreshing}
 						onRefresh={onRefresh}
+						focusDate={currentViewDate}
+						focusKey={listFocusKey}
+						loading={listLoading}
+						loadError={listLoadError}
+						reached={listReached}
+						onLoadMore={onListLoadMore}
+						onRetry={onListRetry}
 					/>
 				</View>
 			) : (
