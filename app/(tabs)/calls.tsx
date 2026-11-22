@@ -73,7 +73,9 @@ export default function CallsScreen() {
   }, [conversations, hiddenPhones]);
 
   const fetchPage = useCallback(
-    async (pageToLoad: number, searchPhone: string, mode: 'initial' | 'refresh' | 'more') => {
+    // 'silent' — фоновая перезагрузка (реконнект после сна): без спиннера pull-to-refresh.
+    // Программно включённый refreshing на iOS сдвигает список и может зависнуть.
+    async (pageToLoad: number, searchPhone: string, mode: 'initial' | 'refresh' | 'silent' | 'more') => {
       if (!token) return;
       const seq = ++requestSeq.current;
       if (mode === 'initial') setLoading(true);
@@ -116,7 +118,7 @@ export default function CallsScreen() {
 
   // Missed socket events after a disconnect → reload the first page silently
   useEffect(() => {
-    if (reconnectCount > 0) fetchPage(1, appliedSearch, 'refresh');
+    if (reconnectCount > 0) fetchPage(1, appliedSearch, 'silent');
   }, [reconnectCount]);
 
   // ─── Real-time ─────────────────────────────────────────────────────────────
