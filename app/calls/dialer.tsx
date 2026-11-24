@@ -73,7 +73,8 @@ export default function DialerScreen() {
   const [employeeSearch, setEmployeeSearch] = useState('');
 
   // Номера без провайдера остались от старой версии — звонить с них нельзя (как в вебе)
-  const callableNumbers = useMemo(() => companyPhones.filter((p) => !!p.provider), [companyPhones]);
+  // Only lines routed through us, and only those I'm assigned to — the backend hangs up the rest
+  const callableNumbers = useMemo(() => companyPhones.filter((p) => !!p.provider && p.can_access), [companyPhones]);
   const [fromId, setFromId] = useState<number | null>(null);
 
   useEffect(() => {

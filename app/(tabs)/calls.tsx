@@ -20,7 +20,9 @@ const PER_PAGE = 20;
 const HIDDEN_PHONES_KEY = 'calls_hidden_company_phones';
 
 export default function CallsScreen() {
-  const { token, companyPhones, mentionsUnread } = useAuth();
+  const { token, companyPhones: allCompanyPhones, mentionsUnread, fetchInitialData } = useAuth();
+  // Lines I'm not assigned to don't show up here at all — no conversations, nothing to filter
+  const companyPhones = useMemo(() => allCompanyPhones.filter((p) => p.can_access), [allCompanyPhones]);
   const { reconnectCount } = useSocket();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -172,6 +174,13 @@ export default function CallsScreen() {
       };
       return [fresh, ...prev];
     });
+  });
+
+  // Someone changed who works which line: reload the lines and the list right away
+  useSocketEvent('phone-access.changed', () => {
+    if (!token) return;
+    fetchInitialData(token).catch(() => {});
+    fetchPage(1, appliedSearch, 'silent');
   });
 
   useSocketEvent<{ conversationId: string; readAt: string }>('conversation.read', ({ conversationId, readAt }) => {
