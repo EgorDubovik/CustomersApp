@@ -62,6 +62,8 @@ export interface CompanyPhone {
   auto_record_calls?: boolean;
   /** Link to the company's 10DLC campaign; texts go out only from an ASSIGNED number */
   sms_status?: 'NOT_ASSIGNED' | 'PENDING' | 'ASSIGNED' | 'FAILED';
+  /** Whether I'm assigned to this line: see its conversations and stats, call and text from it */
+  can_access?: boolean;
 }
 
 interface AuthContextType {
