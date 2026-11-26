@@ -163,6 +163,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             provider: p.provider ?? null,
             auto_record_calls: !!p.auto_record_calls,
             sms_status: p.sms_status ?? 'NOT_ASSIGNED',
+            // Without this the dialer and the number filter drop every line: they show only lines I'm assigned to
+            can_access: !!p.can_access,
           }));
           setCompanyPhones(phones);
           await storage.setItem('company_phones', JSON.stringify(phones));
