@@ -346,7 +346,7 @@ export default function SmsComposer({ isDark, conversationId, companyPhone, reci
             placeholderTextColor={c.textFaint}
             multiline
             maxLength={SMS_MAX_LENGTH}
-            style={[styles.composerInput, { color: c.text }]}
+            style={[styles.composerInput, !text && styles.composerInputEmpty, { color: c.text }]}
           />
           <Pressable onPress={suggest} disabled={suggesting} hitSlop={6} style={({ pressed }) => [styles.composerAiBtn, (pressed || suggesting) && { opacity: 0.6 }]}>
             <LinearGradient colors={['#818CF8', '#C084FC']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.composerAiGradient}>

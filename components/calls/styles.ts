@@ -327,6 +327,14 @@ export const callsStyles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 6,
   },
+  /**
+   * The composer input while it is empty: one line (lineHeight + paddings). A multiline
+   * TextInput that grew doesn't shrink back when its text is cleared from code (after
+   * sending), so the height is pinned until the next character is typed.
+   */
+  composerInputEmpty: {
+    height: 32,
+  },
   composerAiBtn: {
     marginBottom: 2,
     marginLeft: 6,

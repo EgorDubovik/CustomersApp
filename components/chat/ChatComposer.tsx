@@ -228,7 +228,7 @@ export default function ChatComposer({ conversationId, c, name, replyTo, onCance
             placeholderTextColor={c.textFaint}
             multiline
             maxLength={MAX_LENGTH}
-            style={[styles.composerInput, { color: c.text }]}
+            style={[styles.composerInput, !text && styles.composerInputEmpty, { color: c.text }]}
           />
         </View>
 
