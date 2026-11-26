@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSocket, useSocketEvent } from '@/context/SocketContext';
 import { useToast } from '@/context/ToastContext';
 import { useColorScheme } from '@/components/useColorScheme';
+import { outboundCallsSupported, placeOutboundCall, subscribeToConnection } from '@/utils/outboundCall';
 import { formatDate } from '@/components/scheduler/utils/TimeHelper';
 import CallItem from '@/components/calls/CallItem';
 import NoteItem from '@/components/calls/NoteItem';
@@ -31,7 +32,7 @@ export default function ConversationScreen() {
   const scrolledToFocusRef = useRef<string | null>(null);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { token, companyPhones, companyEmployees } = useAuth();
+  const { token, user, companyPhones, companyEmployees } = useAuth();
   const { reconnectCount } = useSocket();
   const { showToast } = useToast();
   const isDark = useColorScheme() === 'dark';
@@ -43,6 +44,8 @@ export default function ConversationScreen() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [transcriptionCallId, setTranscriptionCallId] = useState<string | null>(null);
+  const [telephonyConnected, setTelephonyConnected] = useState(false);
+  const [calling, setCalling] = useState(false);
   const conversationRef = useRef<IConversation | null>(null);
   conversationRef.current = conversation;
 
@@ -181,6 +184,25 @@ export default function ConversationScreen() {
   const customer = employee ? null : conversation?.customer ?? null;
   const title = employee?.name || customer?.name || formatPhoneNumber(customerPhone) || 'Conversation';
 
+  useEffect(() => subscribeToConnection(setTelephonyConnected), []);
+
+  // Call back from the same company number as this conversation — only a number routed through
+  // our telephony (provider set, same rule as the SMS field) that I'm allowed to use; iPhone only.
+  const canCall = outboundCallsSupported && !!conversation && !!customerPhone && !!matched?.provider && matched.can_access !== false;
+  const callCustomer = async () => {
+    if (!matched || !customerPhone || calling) return;
+    if (!telephonyConnected) return showToast({ message: 'Telephony is not connected', type: 'error' });
+    setCalling(true);
+    try {
+      await placeOutboundCall(customerPhone, matched.phone, user?.id);
+      router.push({ pathname: '/calls/active-call', params: { fromPhoneId: String(matched.id) } } as any);
+    } catch (e: any) {
+      showToast({ message: e?.message || 'Could not place the call', type: 'error' });
+    } finally {
+      setCalling(false);
+    }
+  };
+
   const copyPhone = () => {
     if (!customerPhone) return;
     Clipboard.setStringAsync(customerPhone);
@@ -288,6 +310,17 @@ export default function ConversationScreen() {
               </Text>
             )}
           </Pressable>
+          {canCall && (
+            <Pressable
+              onPress={callCustomer}
+              disabled={calling}
+              hitSlop={8}
+              accessibilityLabel={`Call ${title}`}
+              style={({ pressed }) => [styles.headerIconBtn, { backgroundColor: '#22C55E' }, (pressed || calling) && { opacity: 0.6 }]}
+            >
+              {calling ? <ActivityIndicator size="small" color="#fff" /> : <SymbolView name={{ ios: 'phone.fill', android: 'call', web: 'call' }} size={18} tintColor="#fff" />}
+            </Pressable>
+          )}
         </View>
 
         {!!conversation && !!companyPhone && (
