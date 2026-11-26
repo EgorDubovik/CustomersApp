@@ -40,7 +40,8 @@ function Row({ icon, text, c }: { icon: { ios: string; android: string }; text: 
  * Customer or appointment card inside a message. Live: shows the current status,
  * time and techs. Tap opens the appointment / customer screen right away.
  */
-export default function EntityCard({ entity, c }: { entity: ChatEntityRef; c: Palette }) {
+/** `onLongPress` — holding the card opens the message's menu, like the rest of the bubble. */
+export default function EntityCard({ entity, c, onLongPress }: { entity: ChatEntityRef; c: Palette; onLongPress?: () => void }) {
   const router = useRouter();
   const { card, reload } = useChatCard(entity);
   const label = entity.type === 'appointment' ? `APPOINTMENT #${entity.id}` : `CUSTOMER #${entity.id}`;
@@ -54,6 +55,7 @@ export default function EntityCard({ entity, c }: { entity: ChatEntityRef; c: Pa
   return (
     <Pressable
       onPress={open}
+      onLongPress={onLongPress}
       style={({ pressed }) => ({ width: 250, borderRadius: 12, borderWidth: 1, borderColor: c.cardBorder, backgroundColor: c.card, padding: 10, gap: 5, opacity: pressed ? 0.7 : 1 })}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>

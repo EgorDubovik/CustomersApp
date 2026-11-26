@@ -10,6 +10,7 @@ import type { ChatAttachment, ChatConversation, ChatMessage } from './types';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { linkify } from '@/utils/linkify';
+import HoldableBubble, { type BubbleAction } from '@/components/calls/HoldableBubble';
 
 /** How far left (px) a message must be swiped to reply to it; past it the bubble moves slower, up to MAX. */
 const REPLY_SWIPE = 60;
@@ -24,7 +25,9 @@ interface Props {
   startsRun: boolean;
   highlighted?: boolean;
   c: (typeof callsPalette)['light'];
-  onLongPress: (message: ChatMessage) => void;
+  /** Long-press menu of a message (copy, delete…) — shown in our own menu over the dimmed chat */
+  getActions: (message: ChatMessage) => BubbleAction[];
+  isDark: boolean;
   /** Swipe the message to the left to reply to it. */
   onReply: (message: ChatMessage) => void;
   onOpenPhoto: (photos: ChatAttachment[], index: number) => void;
@@ -69,7 +72,7 @@ function MessageItem(props: Props) {
   return <UserMessage {...props} />;
 }
 
-function UserMessage({ message, conversation, myUserId, name, startsRun, highlighted, c, onLongPress, onReply, onOpenPhoto, onRetry, onDiscard }: Props) {
+function UserMessage({ message, conversation, myUserId, name, startsRun, highlighted, c, getActions, isDark, onReply, onOpenPhoto, onRetry, onDiscard }: Props) {
 
   const mine = message.sender_id === myUserId;
   const isGroup = conversation.type === 'group';
@@ -80,7 +83,6 @@ function UserMessage({ message, conversation, myUserId, name, startsRun, highlig
   const fg = mine ? c.bubbleOutText : c.bubbleInText;
   const sender = conversation.members.find((m) => m.id === message.sender_id);
   const hasMedia = !message.deleted && (message.attachments.length > 0 || !!message.entity);
-  const longPress = () => onLongPress(message);
 
   // ─── Swipe left to reply (deleted and not-yet-sent messages can't be replied to) ───
   const canReply = !message.deleted && !message.send_status;
@@ -139,38 +141,43 @@ function UserMessage({ message, conversation, myUserId, name, startsRun, highlig
           <View style={{ maxWidth: '78%', alignItems: mine ? 'flex-end' : 'flex-start' }}>
             {showAuthor && <Text style={{ fontSize: 12, fontWeight: '700', color: sender?.color || c.textMuted, marginBottom: 2, marginLeft: 4 }}>{name(message.sender_id)}</Text>}
 
-            <Pressable
-              onLongPress={longPress}
-              delayLongPress={300}
-              style={{
-                borderRadius: 16,
-                borderBottomRightRadius: mine && startsRun ? 4 : 16,
-                borderBottomLeftRadius: !mine && startsRun ? 4 : 16,
-                paddingHorizontal: hasMedia ? 4 : 12,
-                paddingVertical: hasMedia ? 4 : 8,
-                backgroundColor: mine ? c.bubbleOut : c.bubbleIn,
-                opacity: failed ? 0.7 : 1,
-                gap: 4,
-              }}
-            >
-              {message.reply_to && (
-                <View style={{ borderLeftWidth: 2, borderLeftColor: mine ? 'rgba(255,255,255,0.7)' : c.primary, paddingLeft: 8, paddingVertical: 2, margin: hasMedia ? 6 : 0, marginBottom: 2 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: fg }}>{name(message.reply_to.sender_id)}</Text>
-                  <Text style={{ fontSize: 12, color: fg, opacity: 0.8 }} numberOfLines={2}>
-                    {messagePreview(message.reply_to, name)}
-                  </Text>
+            <HoldableBubble
+              align={mine ? 'right' : 'left'}
+              isDark={isDark}
+              actions={getActions(message)}
+              renderBubble={(onLongPress) => (
+                <View
+                  style={{
+                    borderRadius: 16,
+                    borderBottomRightRadius: mine && startsRun ? 4 : 16,
+                    borderBottomLeftRadius: !mine && startsRun ? 4 : 16,
+                    paddingHorizontal: hasMedia ? 4 : 12,
+                    paddingVertical: hasMedia ? 4 : 8,
+                    backgroundColor: mine ? c.bubbleOut : c.bubbleIn,
+                    opacity: failed ? 0.7 : 1,
+                    gap: 4,
+                  }}
+                >
+                  {message.reply_to && (
+                    <View style={{ borderLeftWidth: 2, borderLeftColor: mine ? 'rgba(255,255,255,0.7)' : c.primary, paddingLeft: 8, paddingVertical: 2, margin: hasMedia ? 6 : 0, marginBottom: 2 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: fg }}>{name(message.reply_to.sender_id)}</Text>
+                      <Text style={{ fontSize: 12, color: fg, opacity: 0.8 }} numberOfLines={2}>
+                        {messagePreview(message.reply_to, name)}
+                      </Text>
+                    </View>
+                  )}
+                  {message.deleted ? (
+                    <Text style={{ fontSize: 14, fontStyle: 'italic', color: fg, opacity: 0.7 }}>Message deleted</Text>
+                  ) : (
+                    <>
+                      {message.attachments.length > 0 && <Photos photos={message.attachments} onOpen={(i) => onOpenPhoto(message.attachments, i)} onLongPress={onLongPress} />}
+                      {message.entity && <EntityCard entity={message.entity} c={c} onLongPress={onLongPress} />}
+                      {!!message.body && <Text style={{ fontSize: 15, lineHeight: 20, color: fg, paddingHorizontal: hasMedia ? 8 : 0, paddingBottom: hasMedia ? 4 : 0 }}>{linkify(message.body, 'b', onLongPress)}</Text>}
+                    </>
+                  )}
                 </View>
               )}
-              {message.deleted ? (
-                <Text style={{ fontSize: 14, fontStyle: 'italic', color: fg, opacity: 0.7 }}>Message deleted</Text>
-              ) : (
-                <>
-                  {message.attachments.length > 0 && <Photos photos={message.attachments} onOpen={(i) => onOpenPhoto(message.attachments, i)} onLongPress={longPress} />}
-                  {message.entity && <EntityCard entity={message.entity} c={c} />}
-                  {!!message.body && <Text style={{ fontSize: 15, lineHeight: 20, color: fg, paddingHorizontal: hasMedia ? 8 : 0, paddingBottom: hasMedia ? 4 : 0 }}>{linkify(message.body, 'b', longPress)}</Text>}
-                </>
-              )}
-            </Pressable>
+            />
 
             {/* Time and ticks under the bubble, no background — as on the web */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2, paddingHorizontal: 4 }}>

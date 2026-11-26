@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActionSheetIOS, ActivityIndicator, Alert, AppState, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -16,6 +16,7 @@ import { conversationTitle, dayLabel, directPeer, isSameDay, makeNameLookup, sta
 import { TYPING_VISIBLE_MS } from '@/components/chat/reducer';
 import type { ChatAttachment, ChatMessage } from '@/components/chat/types';
 import { callsPalette } from '@/components/calls/styles';
+import type { BubbleAction } from '@/components/calls/HoldableBubble';
 
 /** How many older pages we pull looking for a linked message (`?m=`). */
 const JUMP_MAX_PAGES = 5;
@@ -118,24 +119,27 @@ export default function ChatThreadScreen() {
     ]);
   };
 
-  const onLongPress = useCallback(
-    (message: ChatMessage) => {
-      if (message.deleted || message.send_status) return;
-      // Reply isn't here — it's a swipe of the message to the left (MessageItem).
-      const actions: { label: string; run: () => void; destructive?: boolean }[] = [];
-      if (message.body) actions.push({ label: 'Copy text', run: () => Clipboard.setStringAsync(message.body ?? '') });
-      if (message.sender_id === myUserId) actions.push({ label: 'Delete', run: () => confirmDelete(message), destructive: true });
-      if (!actions.length) return;
-      if (Platform.OS === 'ios') {
-        const destructive = actions.findIndex((a) => a.destructive);
-        ActionSheetIOS.showActionSheetWithOptions(
-          { options: [...actions.map((a) => a.label), 'Cancel'], cancelButtonIndex: actions.length, destructiveButtonIndex: destructive === -1 ? undefined : destructive },
-          (i) => actions[i]?.run(),
-        );
-      } else {
-        Alert.alert('Message', undefined, [...actions.map((a) => ({ text: a.label, onPress: a.run, style: a.destructive ? ('destructive' as const) : undefined })), { text: 'Cancel', style: 'cancel' as const }]);
-      }
+  // Long-press menu of a message — our own menu over the dimmed chat (HoldableBubble).
+  // Reply isn't here: it's a swipe of the message to the left (MessageItem).
+  const getActions = useCallback(
+    (message: ChatMessage): BubbleAction[] => {
+      if (message.deleted || message.send_status) return [];
+      const actions: BubbleAction[] = [];
+      if (message.body)
+        actions.push({
+          key: 'copy',
+          label: 'Copy text',
+          icon: { ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' },
+          onPress: () => {
+            Clipboard.setStringAsync(message.body ?? '');
+            showToast({ message: 'Copied', type: 'success' });
+          },
+        });
+      if (message.sender_id === myUserId)
+        actions.push({ key: 'delete', label: 'Delete', icon: { ios: 'trash', android: 'delete', web: 'delete' }, destructive: true, onPress: () => confirmDelete(message) });
+      return actions;
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [myUserId],
   );
 
@@ -201,7 +205,8 @@ export default function ChatThreadScreen() {
           startsRun={startsNewRun(older, item)}
           highlighted={item.id === highlightId}
           c={c}
-          onLongPress={onLongPress}
+          getActions={getActions}
+          isDark={isDark}
           onReply={setReplyTo}
           onOpenPhoto={onOpenPhoto}
           onRetry={onRetry}

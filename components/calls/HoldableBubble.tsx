@@ -42,7 +42,7 @@ const GAP = 8;
 type Anchor = { x: number; y: number; width: number; height: number };
 
 /**
- * A timeline bubble (SMS / call) with its own context menu on a long press:
+ * A bubble (Calls SMS / call, chat message) with its own context menu on a long press:
  * while the finger is held the bubble sinks a little, so it's clear something is about
  * to happen; then the screen dims and blurs, the bubble is lifted above it in place,
  * and a menu card appears under it (or above, when there's no room).
@@ -79,6 +79,7 @@ export default forwardRef<HoldableBubbleHandle, Props>(function HoldableBubble({
       >
         <Pressable
           onPressIn={() => {
+            if (!actions.length) return; // nothing to open — don't pretend it's pressable
             // A short delay so just scrolling past doesn't make bubbles twitch.
             pressScale.value = withDelay(90, withTiming(PRESSED_SCALE, { duration: HOLD_MS - 90, easing: Easing.out(Easing.quad) }));
           }}
