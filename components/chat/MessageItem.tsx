@@ -11,6 +11,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { linkify } from '@/utils/linkify';
 import HoldableBubble, { type BubbleAction } from '@/components/calls/HoldableBubble';
+import TimeWithDate from '@/components/TimeWithDate';
 
 /** How far left (px) a message must be swiped to reply to it; past it the bubble moves slower, up to MAX. */
 const REPLY_SWIPE = 60;
@@ -181,7 +182,7 @@ function UserMessage({ message, conversation, myUserId, name, startsRun, highlig
 
             {/* Time and ticks under the bubble, no background — as on the web */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2, paddingHorizontal: 4 }}>
-              <Text style={{ fontSize: 11, color: c.textFaint }}>{timeOfDay(message.created_at)}</Text>
+              <TimeWithDate date={message.created_at} time={timeOfDay(message.created_at)} style={{ fontSize: 11, color: c.textFaint }} />
               {mine && sending && <SymbolView name={{ ios: 'clock', android: 'schedule', web: 'schedule' }} size={10} tintColor={c.textFaint} />}
               {mine && !message.send_status && !isGroup && (
                 <MessageTicks double={read} color={read ? c.primary : c.textFaint} />

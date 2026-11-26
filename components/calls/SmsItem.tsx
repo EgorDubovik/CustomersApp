@@ -9,6 +9,7 @@ import { formatDate } from '@/components/scheduler/utils/TimeHelper';
 import { callsPalette, callsStyles as styles } from './styles';
 import { ICallComment, ISmsMessage } from './types';
 import { linkify } from '@/utils/linkify';
+import TimeWithDate from '@/components/TimeWithDate';
 
 // The whole road to the customer — each step is confirmed by a carrier webhook
 const STATUS_LABEL: Record<ISmsMessage['status'], string> = {
@@ -97,7 +98,7 @@ export default function SmsItem({ message, isDark, onCommentsChange, focusKey, f
         />
         <View style={styles.bubbleMeta}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={[styles.metaText, { color: c.textFaint }]}>at {formatDate(message.created_at, 'hh:mm A')}</Text>
+            <TimeWithDate date={message.created_at} time={`at ${formatDate(message.created_at, 'hh:mm A')}`} style={[styles.metaText, { color: c.textFaint }]} />
             <CommentsBadge count={commentsCount} active={!!commentsFrom} c={c} onPress={openComments} />
           </View>
           {!!status && <Text style={[styles.metaText, { fontWeight: '600', color: message.status === 'failed' ? c.danger : c.textFaint }]}>{status}</Text>}

@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { callsPalette, callsStyles as styles } from './styles';
 import { IConversationNote } from './types';
 import { linkify } from '@/utils/linkify';
+import TimeWithDate from '@/components/TimeWithDate';
 
 const ROLE_ADMIN = 1;
 
@@ -49,7 +50,7 @@ export default function NoteItem({ note, isDark, onDeleted }: { note: IConversat
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: note.user?.color || c.textFaint }} />
           <Text style={{ fontSize: 11, fontWeight: '600', color: c.textMuted }} numberOfLines={1}>{note.user?.name || 'Dispatcher'}</Text>
-          <Text style={{ fontSize: 11, color: c.textFaint }}>· {formatDate(note.created_at, 'hh:mm A')}</Text>
+          <TimeWithDate date={note.created_at} time={`· ${formatDate(note.created_at, 'hh:mm A')}`} style={{ fontSize: 11, color: c.textFaint }} />
         </View>
         <Text style={{ fontSize: 13, lineHeight: 19, color: c.text }}>{linkify(note.note)}</Text>
       </View>

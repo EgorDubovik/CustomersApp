@@ -9,6 +9,7 @@ import { formatCallDuration, formatClock } from './helpers';
 import CommentsSheet from './CommentsSheet';
 import HoldableBubble, { type BubbleAction, type HoldableBubbleHandle } from './HoldableBubble';
 import CommentsBadge from './CommentsBadge';
+import TimeWithDate from '@/components/TimeWithDate';
 
 
 interface Props {
@@ -147,7 +148,7 @@ export default function CallItem({ call, isDark, onCommentsChange, onShowTranscr
           {/* ─── Meta row: time · summary ─── */}
           <View style={[styles.bubbleMeta, { flexDirection: isOutgoing ? 'row-reverse' : 'row' }]}>
             <View style={{ flexDirection: isOutgoing ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={[styles.metaText, { color: c.textFaint }]}>at {formatDate(call.created_at, 'hh:mm A')}</Text>
+              <TimeWithDate date={call.created_at} time={`at ${formatDate(call.created_at, 'hh:mm A')}`} style={[styles.metaText, { color: c.textFaint }]} />
               <CommentsBadge count={commentsCount} active={!!commentsFrom} c={c} onPress={openComments} />
             </View>
             {!!call.ai_details?.summary && (
