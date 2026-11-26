@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { formatDate } from '@/components/scheduler/utils/TimeHelper';
@@ -6,8 +6,8 @@ import AudioPlayer from './AudioPlayer';
 import { callsPalette, callsStyles as styles } from './styles';
 import { ICall, ICallComment } from './types';
 import { formatCallDuration, formatClock } from './helpers';
-import CommentsPanel from './CommentsPanel';
-import HoldableBubble, { type BubbleAction } from './HoldableBubble';
+import CommentsSheet from './CommentsSheet';
+import HoldableBubble, { type BubbleAction, type HoldableBubbleHandle } from './HoldableBubble';
 import CommentsBadge from './CommentsBadge';
 
 
@@ -38,13 +38,14 @@ export default function CallItem({ call, isDark, onCommentsChange, onShowTranscr
   const c = isDark ? callsPalette.dark : callsPalette.light;
 
   const [showSummary, setShowSummary] = useState(false);
-  const [showComments, setShowComments] = useState(false);
+  // Comments sheet: open, and the screen Y it rises from (null → from the bottom)
+  const [commentsFrom, setCommentsFrom] = useState<{ y: number | null } | null>(null);
+  const bubbleRef = useRef<HoldableBubbleHandle>(null);
 
-  // Jumped here from a push / Mentions → open the comments
+  // Jumped here from a push / Mentions → open the comments (the list is still scrolling, so from the bottom)
   useEffect(() => {
     if (!focusKey) return;
-    setShowSummary(false);
-    setShowComments(true);
+    setCommentsFrom({ y: null });
   }, [focusKey]);
 
   const isOutgoing = call.direction === 'outgoing';
@@ -73,18 +74,18 @@ export default function CallItem({ call, isDark, onCommentsChange, onShowTranscr
   const trackColor = isOutgoing ? 'rgba(255,255,255,0.28)' : isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)';
 
   const commentsCount = call.comments?.length ?? 0;
-  const toggleComments = () => {
-    setShowComments((v) => !v);
-    setShowSummary(false);
+  const openComments = () => {
+    if (!bubbleRef.current) return setCommentsFrom({ y: null });
+    bubbleRef.current.measure((y) => setCommentsFrom({ y: Number.isFinite(y) ? y : null }));
   };
   // Long press on the bubble: comments and, when the call was recorded / analysed, its transcription
   const hasTranscription = !!call.ai_details?.transcription || !!call.ai_details?.summary || (isCompleted && hasRecord);
   const actions: BubbleAction[] = [
     {
       key: 'comments',
-      label: showComments ? 'Hide comments' : commentsCount ? `Comments (${commentsCount})` : 'Add comment',
+      label: commentsCount ? `Comments (${commentsCount})` : 'Add comment',
       icon: { ios: 'bubble.left.and.bubble.right', android: 'forum', web: 'forum' },
-      onPress: toggleComments,
+      onPress: openComments,
     },
   ];
   if (hasTranscription)
@@ -95,65 +96,63 @@ export default function CallItem({ call, isDark, onCommentsChange, onShowTranscr
       onPress: () => onShowTranscription(call.id),
     });
 
+  const bubble = () => (
+    <View style={[styles.bubble, isOutgoing ? styles.bubbleOut : styles.bubbleIn, { backgroundColor: bubbleBg, maxWidth: '100%', gap: 8 }]}>
+      {isMissed && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <SymbolView name={{ ios: 'phone.down.fill', android: 'phone_missed', web: 'phone_missed' }} size={18} tintColor={isOutgoing ? '#FECACA' : c.danger} />
+          <Text style={{ fontSize: 14, fontWeight: '700', color: isOutgoing ? '#FECACA' : c.danger }}>{isVoicemail ? 'Missed call · voicemail' : 'Missed call'}</Text>
+        </View>
+      )}
+
+      {(isRinging || isOngoing) && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: isOngoing ? c.success : bubbleMuted }} />
+          <Text style={{ flex: 1, fontSize: 13, fontStyle: 'italic', color: bubbleMuted }}>
+            {isOngoing ? 'Call in progress' : isOutgoing ? 'Outgoing call…' : 'Incoming call…'}
+          </Text>
+          {isOngoing && <Text style={{ fontSize: 12, fontWeight: '700', color: bubbleText, fontVariant: ['tabular-nums'] }}>{formatClock(elapsed)}</Text>}
+        </View>
+      )}
+
+      {(isCompleted || isVoicemail) &&
+        (hasRecord ? (
+          <AudioPlayer url={audioUrl} durationHint={audioDuration} tint={bubbleText} trackColor={trackColor} textColor={bubbleMuted} />
+        ) : isWaitingForRecording ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <ActivityIndicator size="small" color={bubbleMuted} />
+            <Text style={{ fontSize: 12, fontStyle: 'italic', color: bubbleMuted }}>Recording processing…</Text>
+          </View>
+        ) : (
+          <Text style={{ fontSize: 12, fontStyle: 'italic', color: bubbleMuted }}>
+            No record{callDuration ? `. Call duration: ${callDuration}` : ''}
+          </Text>
+        ))}
+    </View>
+  );
+
   return (
-    // Column: bubble row on top, comments panel (full width) below. While the panel is
-    // open the whole block gets a tinted frame so it's obvious which call is being commented.
-    <View style={[styles.callBlock, showComments && { backgroundColor: c.primaryMuted, borderColor: c.primary, padding: 8, marginHorizontal: -4 }]}>
+    <View style={styles.callBlock}>
       <View style={{ flexDirection: 'row', justifyContent: isOutgoing ? 'flex-end' : 'flex-start' }}>
         <View style={{ maxWidth: '92%', minWidth: 240 }}>
           {/* ─── Bubble: hold it for the menu (comments, transcription) ─── */}
           <HoldableBubble
+            ref={bubbleRef}
             align={isOutgoing ? 'right' : 'left'}
             isDark={isDark}
             actions={actions}
-            renderBubble={() => (
-              <View style={[styles.bubble, isOutgoing ? styles.bubbleOut : styles.bubbleIn, { backgroundColor: bubbleBg, maxWidth: '100%', gap: 8 }]}>
-                {isMissed && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <SymbolView name={{ ios: 'phone.down.fill', android: 'phone_missed', web: 'phone_missed' }} size={18} tintColor={isOutgoing ? '#FECACA' : c.danger} />
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: isOutgoing ? '#FECACA' : c.danger }}>{isVoicemail ? 'Missed call · voicemail' : 'Missed call'}</Text>
-                  </View>
-                )}
-
-                {(isRinging || isOngoing) && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: isOngoing ? c.success : bubbleMuted }} />
-                    <Text style={{ flex: 1, fontSize: 13, fontStyle: 'italic', color: bubbleMuted }}>
-                      {isOngoing ? 'Call in progress' : isOutgoing ? 'Outgoing call…' : 'Incoming call…'}
-                    </Text>
-                    {isOngoing && <Text style={{ fontSize: 12, fontWeight: '700', color: bubbleText, fontVariant: ['tabular-nums'] }}>{formatClock(elapsed)}</Text>}
-                  </View>
-                )}
-
-                {(isCompleted || isVoicemail) &&
-                  (hasRecord ? (
-                    <AudioPlayer url={audioUrl} durationHint={audioDuration} tint={bubbleText} trackColor={trackColor} textColor={bubbleMuted} />
-                  ) : isWaitingForRecording ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <ActivityIndicator size="small" color={bubbleMuted} />
-                      <Text style={{ fontSize: 12, fontStyle: 'italic', color: bubbleMuted }}>Recording processing…</Text>
-                    </View>
-                  ) : (
-                    <Text style={{ fontSize: 12, fontStyle: 'italic', color: bubbleMuted }}>
-                      No record{callDuration ? `. Call duration: ${callDuration}` : ''}
-                    </Text>
-                  ))}
-              </View>
-            )}
+            renderBubble={bubble}
           />
 
           {/* ─── Meta row: time · summary ─── */}
           <View style={[styles.bubbleMeta, { flexDirection: isOutgoing ? 'row-reverse' : 'row' }]}>
             <View style={{ flexDirection: isOutgoing ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
               <Text style={[styles.metaText, { color: c.textFaint }]}>at {formatDate(call.created_at, 'hh:mm A')}</Text>
-              <CommentsBadge count={commentsCount} active={showComments} c={c} onPress={toggleComments} />
+              <CommentsBadge count={commentsCount} active={!!commentsFrom} c={c} onPress={openComments} />
             </View>
             {!!call.ai_details?.summary && (
               <Pressable
-                onPress={() => {
-                  setShowSummary((v) => !v);
-                  setShowComments(false);
-                }}
+                onPress={() => setShowSummary((v) => !v)}
                 hitSlop={6}
               >
                 <Text style={[styles.metaLink, { color: showSummary ? c.primary : c.textMuted }]}>Call summary</Text>
@@ -178,17 +177,21 @@ export default function CallItem({ call, isDark, onCommentsChange, onShowTranscr
         </View>
       </View>
 
-      {/* ─── Comments panel — full width below the bubble ─── */}
-      {showComments && (
-        <CommentsPanel
-          itemType="call"
-          itemId={call.id}
-          comments={call.comments || []}
-          onCommentsChange={(comments) => onCommentsChange(call, comments)}
-          isDark={isDark}
-          highlightCommentId={focusCommentId}
-        />
-      )}
+      <CommentsSheet
+        visible={!!commentsFrom}
+        fromY={commentsFrom?.y}
+        onClose={() => setCommentsFrom(null)}
+        itemType="call"
+        itemId={call.id}
+        comments={call.comments || []}
+        onCommentsChange={(comments) => onCommentsChange(call, comments)}
+        isDark={isDark}
+        // The call bubble has no width of its own (the player stretches), so give the copy one
+        preview={<View style={{ width: 280 }}>{bubble()}</View>}
+        align={isOutgoing ? 'right' : 'left'}
+        time={`at ${formatDate(call.created_at, 'hh:mm A')}`}
+        highlightCommentId={focusCommentId}
+      />
     </View>
   );
 }

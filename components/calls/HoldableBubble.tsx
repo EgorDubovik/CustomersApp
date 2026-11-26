@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { Modal, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,11 @@ export interface BubbleAction {
   icon: SymbolViewProps['name'];
   onPress: () => void;
   destructive?: boolean;
+}
+
+/** Lets the owner find the bubble on screen — e.g. to open the comments sheet from its place. */
+export interface HoldableBubbleHandle {
+  measure: (callback: (y: number) => void) => void;
 }
 
 interface Props {
@@ -42,8 +47,11 @@ type Anchor = { x: number; y: number; width: number; height: number };
  * to happen; then the screen dims and blurs, the bubble is lifted above it in place,
  * and a menu card appears under it (or above, when there's no room).
  */
-export default function HoldableBubble({ renderBubble, actions, align, isDark, style }: Props) {
+export default forwardRef<HoldableBubbleHandle, Props>(function HoldableBubble({ renderBubble, actions, align, isDark, style }, handle) {
   const ref = useRef<View>(null);
+  useImperativeHandle(handle, () => ({
+    measure: (callback) => (ref.current ? ref.current.measureInWindow((_x, y) => callback(y)) : callback(NaN)),
+  }));
   const size = useRef({ width: 0, height: 0 });
   const pressScale = useSharedValue(1);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
@@ -87,7 +95,7 @@ export default function HoldableBubble({ renderBubble, actions, align, isDark, s
       {anchor && <BubbleMenu anchor={anchor} align={align} actions={actions} isDark={isDark} bubble={renderBubble(() => {})} onClosed={() => setAnchor(null)} />}
     </>
   );
-}
+});
 
 function BubbleMenu({
   anchor,
@@ -127,14 +135,32 @@ function BubbleMenu({
     progress.value = withSpring(1, { damping: 18, stiffness: 220, mass: 0.7 });
   }, [progress]);
 
+  // iOS can't present a Modal while another one is still going away: an action that opens one
+  // (the comments sheet) silently did nothing. So actions run only once the menu is fully gone.
+  const pending = useRef<(() => void) | undefined>(undefined);
+  const [visible, setVisible] = useState(true);
+  const done = useRef(false);
+  const afterDismiss = () => {
+    if (done.current) return;
+    done.current = true;
+    onClosed();
+    pending.current?.();
+  };
+  const finish = () => {
+    if (Platform.OS === 'ios') {
+      setVisible(false); // → onDismiss below
+      setTimeout(afterDismiss, 600); // in case onDismiss never comes
+    } else {
+      afterDismiss();
+    }
+  };
   const close = (after?: () => void) => {
     if (closing.current) return;
     closing.current = true;
+    pending.current = after;
     progress.value = withTiming(0, { duration: 160 }, (finished) => {
-      if (finished) runOnJS(onClosed)();
+      if (finished) runOnJS(finish)();
     });
-    // Copy / open comments right away — the menu fades out on its own.
-    after?.();
   };
 
   const backdropStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, progress.value) }));
@@ -147,7 +173,14 @@ function BubbleMenu({
   }));
 
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={() => close()}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={() => close()}
+      onDismiss={afterDismiss}
+    >
       <Pressable style={StyleSheet.absoluteFill} onPress={() => close()} accessibilityLabel="Close menu">
         <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
           <BlurView intensity={22} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />

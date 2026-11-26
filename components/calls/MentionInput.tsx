@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { NativeSyntheticEvent, Pressable, StyleProp, Text, TextInput, TextInputSelectionChangeEventData, TextStyle, View } from 'react-native';
 import { getInitials } from '@/components/appointment/tabs/shared';
 import { MentionUser, displayToMarkup, markupToDisplay, mentionRanges, splitDisplay } from '@/utils/mentions';
@@ -26,6 +26,13 @@ interface Props {
   palette: Palette;
   style?: StyleProp<TextStyle>;
   editable?: boolean;
+}
+
+/** What a parent can do with the field — e.g. the @ button next to it. */
+export interface MentionInputHandle {
+  focus: () => void;
+  /** Puts "@" at the caret (with a space before it when needed) and opens the people list. */
+  startMention: () => void;
 }
 
 interface Trigger {
@@ -56,7 +63,8 @@ function detectTrigger(text: string, caret: number): Trigger | null {
  * the same `@[Name](user:ID)` markup the backend reads; deleting into a mention
  * removes it whole, deleting a letter elsewhere in it turns it into plain text.
  */
-export default function MentionInput({ value, onChange, candidates, placeholder, palette: c, style, editable = true }: Props) {
+export default forwardRef<MentionInputHandle, Props>(function MentionInput({ value, onChange, candidates, placeholder, palette: c, style, editable = true }, ref) {
+  const inputRef = useRef<TextInput>(null);
   const { display, mentions } = useMemo(() => markupToDisplay(value), [value]);
   // Empty field → no children at all, otherwise the placeholder may not show
   const segments = useMemo(() => (display ? splitDisplay(display, mentions) : []), [display, mentions]);
@@ -129,6 +137,24 @@ export default function MentionInput({ value, onChange, candidates, placeholder,
     onChange(displayToMarkup(nextDisplay, known));
   };
 
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+    startMention: () => {
+      const current = latestDisplayRef.current;
+      const caret = Math.min(selectionRef.current.start, current.length);
+      const needsSpace = caret > 0 && !/\s/.test(current[caret - 1]);
+      const insert = needsSpace ? ' @' : '@';
+      const next = current.slice(0, caret) + insert + current.slice(caret);
+      const at = caret + insert.length;
+      latestDisplayRef.current = next;
+      selectionRef.current = { start: at, end: at };
+      setForcedSelection({ start: at, end: at });
+      setTrigger({ start: at - 1, query: '' });
+      onChange(displayToMarkup(next, mentions));
+      inputRef.current?.focus();
+    },
+  }));
+
   return (
     <View style={{ flex: 1 }}>
       {suggestions.length > 0 && (
@@ -177,6 +203,7 @@ export default function MentionInput({ value, onChange, candidates, placeholder,
       )}
 
       <TextInput
+        ref={inputRef}
         onChangeText={handleChangeText}
         onSelectionChange={handleSelectionChange}
         selection={forcedSelection}
@@ -199,4 +226,4 @@ export default function MentionInput({ value, onChange, candidates, placeholder,
       </TextInput>
     </View>
   );
-}
+});
