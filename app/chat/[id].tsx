@@ -121,9 +121,11 @@ export default function ChatThreadScreen() {
   const onLongPress = useCallback(
     (message: ChatMessage) => {
       if (message.deleted || message.send_status) return;
-      const actions: { label: string; run: () => void; destructive?: boolean }[] = [{ label: 'Reply', run: () => setReplyTo(message) }];
+      // Reply isn't here — it's a swipe of the message to the left (MessageItem).
+      const actions: { label: string; run: () => void; destructive?: boolean }[] = [];
       if (message.body) actions.push({ label: 'Copy text', run: () => Clipboard.setStringAsync(message.body ?? '') });
       if (message.sender_id === myUserId) actions.push({ label: 'Delete', run: () => confirmDelete(message), destructive: true });
+      if (!actions.length) return;
       if (Platform.OS === 'ios') {
         const destructive = actions.findIndex((a) => a.destructive);
         ActionSheetIOS.showActionSheetWithOptions(
@@ -200,6 +202,7 @@ export default function ChatThreadScreen() {
           highlighted={item.id === highlightId}
           c={c}
           onLongPress={onLongPress}
+          onReply={setReplyTo}
           onOpenPhoto={onOpenPhoto}
           onRetry={onRetry}
           onDiscard={onDiscard}
