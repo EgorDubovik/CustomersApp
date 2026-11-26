@@ -155,7 +155,7 @@ export default function MentionsScreen() {
             {customer} · on {item.item_type === 'sms' ? 'SMS' : 'call'}
           </Text>
           <Text style={{ fontSize: 13, color: unread ? c.text : c.textSecondary, marginTop: 2 }} numberOfLines={2}>
-            {item.comment === null ? <Text style={{ fontStyle: 'italic', color: c.textFaint }}>Comment was deleted</Text> : renderMentions(item.comment, c.primary, user?.id)}
+            {item.comment === null ? <Text style={{ fontStyle: 'italic', color: c.textFaint }}>Comment was deleted</Text> : renderMentions(item.comment, c.primary, user?.id, { links: false })}
           </Text>
         </View>
       </Pressable>

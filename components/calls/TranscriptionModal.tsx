@@ -6,6 +6,7 @@ import { API_URL } from '@/constants/Config';
 import { useToast } from '@/context/ToastContext';
 import { styles as appStyles } from '@/components/appointment/styles';
 import { callsPalette } from './styles';
+import { linkify } from '@/utils/linkify';
 
 interface Props {
   visible: boolean;
@@ -115,7 +116,7 @@ export default function TranscriptionModal({ visible, onClose, callId, token, is
                   <Text style={{ fontSize: 10, fontWeight: '800', letterSpacing: 0.8, color: t.role === 'dispatcher' ? c.primary : t.role === 'customer' ? c.success : c.textFaint, marginBottom: 2 }}>
                     {t.speaker.toUpperCase()}
                   </Text>
-                  <Text style={{ fontSize: 14, lineHeight: 20, color: c.text }}>{t.text}</Text>
+                  <Text style={{ fontSize: 14, lineHeight: 20, color: c.text }}>{linkify(t.text)}</Text>
                 </View>
               ))
             )}

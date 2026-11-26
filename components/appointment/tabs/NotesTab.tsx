@@ -10,6 +10,7 @@ import { palette, styles } from '../styles';
 import { IAppointmentDetails, INote, IStickyNote } from '../types';
 import StickyNoteModal from '../StickyNoteModal';
 import { EmptyText, HeaderIconButton, SectionCard, getInitials } from './shared';
+import { linkify } from '@/utils/linkify';
 
 interface Props {
   appointment: IAppointmentDetails;
@@ -241,7 +242,7 @@ function StickyNotesCard({
             )}
           </Pressable>
           <Text style={{ flex: 1, fontSize: 13, color: c.text, lineHeight: 18, textDecorationLine: done ? 'line-through' : 'none' }}>
-            {note.text}
+            {linkify(note.text)}
           </Text>
           {canDelete && (
             <Pressable onPress={() => remove(note)} hitSlop={8} disabled={removingId === note.id}>

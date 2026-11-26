@@ -5,6 +5,7 @@ import CommentsPanel from './CommentsPanel';
 import { formatDate } from '@/components/scheduler/utils/TimeHelper';
 import { callsPalette, callsStyles as styles } from './styles';
 import { ICallComment, ISmsMessage } from './types';
+import { linkify } from '@/utils/linkify';
 
 // The whole road to the customer — each step is confirmed by a carrier webhook
 const STATUS_LABEL: Record<ISmsMessage['status'], string> = {
@@ -55,7 +56,7 @@ export default function SmsItem({ message, isDark, onCommentsChange, focusKey, f
               ))}
             </View>
           )}
-          {!!message.text && <Text style={{ fontSize: 14, lineHeight: 20, color: isOutbound ? c.bubbleOutText : c.bubbleInText }}>{message.text}</Text>}
+          {!!message.text && <Text style={{ fontSize: 14, lineHeight: 20, color: isOutbound ? c.bubbleOutText : c.bubbleInText }}>{linkify(message.text)}</Text>}
         </View>
           <Pressable onPress={() => setShowComments((v) => !v)} hitSlop={8} accessibilityLabel="Comments" style={({ pressed }) => [styles.commentToggle, pressed && { opacity: 0.6 }]}>
             <SymbolView name={{ ios: 'bubble.left.and.bubble.right', android: 'forum', web: 'forum' }} size={20} tintColor={showComments ? c.primary : c.textMuted} />

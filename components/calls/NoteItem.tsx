@@ -6,6 +6,7 @@ import { API_URL } from '@/constants/Config';
 import { useAuth } from '@/context/AuthContext';
 import { callsPalette, callsStyles as styles } from './styles';
 import { IConversationNote } from './types';
+import { linkify } from '@/utils/linkify';
 
 const ROLE_ADMIN = 1;
 
@@ -50,7 +51,7 @@ export default function NoteItem({ note, isDark, onDeleted }: { note: IConversat
           <Text style={{ fontSize: 11, fontWeight: '600', color: c.textMuted }} numberOfLines={1}>{note.user?.name || 'Dispatcher'}</Text>
           <Text style={{ fontSize: 11, color: c.textFaint }}>· {formatDate(note.created_at, 'hh:mm A')}</Text>
         </View>
-        <Text style={{ fontSize: 13, lineHeight: 19, color: c.text }}>{note.note}</Text>
+        <Text style={{ fontSize: 13, lineHeight: 19, color: c.text }}>{linkify(note.note)}</Text>
       </View>
       {canDelete && (
         <Pressable onPress={remove} hitSlop={8} disabled={deleting}>

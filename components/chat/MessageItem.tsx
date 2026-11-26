@@ -7,6 +7,7 @@ import EntityCard from './EntityCard';
 import MessageTicks from './MessageTicks';
 import { isReadByPeer, messagePreview, NameLookup, systemText, timeOfDay } from './helpers';
 import type { ChatAttachment, ChatConversation, ChatMessage } from './types';
+import { linkify } from '@/utils/linkify';
 
 interface Props {
   message: ChatMessage;
@@ -113,7 +114,7 @@ function MessageItem({ message, conversation, myUserId, name, startsRun, highlig
             <>
               {message.attachments.length > 0 && <Photos photos={message.attachments} onOpen={(i) => onOpenPhoto(message.attachments, i)} onLongPress={longPress} />}
               {message.entity && <EntityCard entity={message.entity} c={c} />}
-              {!!message.body && <Text style={{ fontSize: 15, lineHeight: 20, color: fg, paddingHorizontal: hasMedia ? 8 : 0, paddingBottom: hasMedia ? 4 : 0 }}>{message.body}</Text>}
+              {!!message.body && <Text style={{ fontSize: 15, lineHeight: 20, color: fg, paddingHorizontal: hasMedia ? 8 : 0, paddingBottom: hasMedia ? 4 : 0 }}>{linkify(message.body, 'b', longPress)}</Text>}
             </>
           )}
         </Pressable>

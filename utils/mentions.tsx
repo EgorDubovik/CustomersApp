@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text } from 'react-native';
+import { linkify } from './linkify';
 
 /**
  * Comment mentions are stored as `@[Name](user:ID)` — the same markup the web
@@ -79,12 +80,15 @@ export function mentionsToPlainText(markup: string): string {
 }
 
 /** A comment for display: mentions coloured, your own one also tinted so "this is for me" stands out. */
-export function renderMentions(text: string, highlightColor: string, myUserId?: number | string): React.ReactNode[] {
+export function renderMentions(text: string, highlightColor: string, myUserId?: number | string, options: { links?: boolean } = {}): React.ReactNode[] {
+  // Links are tappable; pass `links: false` where the comment sits inside a tappable row.
+  const links = options.links ?? true;
+  const plain = (chunk: string, key: number) => (links ? <React.Fragment key={`t${key}`}>{linkify(chunk, `t${key}-`)}</React.Fragment> : chunk);
   const parts: React.ReactNode[] = [];
   let last = 0;
   for (const match of (text ?? '').matchAll(MENTION_RE)) {
     const start = match.index ?? 0;
-    if (start > last) parts.push(text.slice(last, start));
+    if (start > last) parts.push(plain(text.slice(last, start), last));
     const isMe = myUserId !== undefined && Number(myUserId) === Number(match[2]);
     parts.push(
       <Text key={start} style={{ color: highlightColor, fontWeight: '700', backgroundColor: isMe ? `${highlightColor}26` : undefined }}>
@@ -93,6 +97,6 @@ export function renderMentions(text: string, highlightColor: string, myUserId?: 
     );
     last = start + match[0].length;
   }
-  if (last < (text ?? '').length) parts.push(text.slice(last));
+  if (last < (text ?? '').length) parts.push(plain(text.slice(last), last));
   return parts;
 }
