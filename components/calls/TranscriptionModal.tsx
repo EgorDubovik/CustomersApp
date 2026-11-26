@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { SymbolView } from 'expo-symbols';
 import { API_URL } from '@/constants/Config';
@@ -96,8 +96,11 @@ export default function TranscriptionModal({ visible, onClose, callId, token, is
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <Pressable style={appStyles.modalOverlay} onPress={onClose}>
-        <Pressable onPress={(e) => e.stopPropagation()} style={[appStyles.modalCard, { backgroundColor: c.modalBg, maxHeight: '85%', width: '100%' }]}>
+      <View style={appStyles.modalOverlay}>
+        {/* Tap outside the card closes it. A layer behind the card, not a Pressable around it —
+            wrapping the card in a Pressable took the touches the text needs to scroll. */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+        <View style={[appStyles.modalCard, { backgroundColor: c.modalBg, maxHeight: '85%', width: '100%' }]}>
           <View style={appStyles.modalHeader}>
             <Text style={[appStyles.modalTitle, { color: c.text }]}>Call Transcription</Text>
             <Pressable onPress={onClose} hitSlop={15} style={({ pressed }) => [appStyles.modalCloseBtn, { backgroundColor: c.inputBg }, pressed && { opacity: 0.7 }]}>
@@ -105,7 +108,8 @@ export default function TranscriptionModal({ visible, onClose, callId, token, is
             </Pressable>
           </View>
 
-          <ScrollView contentContainerStyle={{ paddingBottom: 16, gap: 12 }} showsVerticalScrollIndicator={false}>
+          {/* flexShrink: fit into the card's maxHeight and scroll, instead of growing past it */}
+          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 16, gap: 12 }} showsVerticalScrollIndicator>
             {loading ? (
               <ActivityIndicator style={{ paddingVertical: 32 }} color={c.primary} />
             ) : !transcription ? (
@@ -131,8 +135,8 @@ export default function TranscriptionModal({ visible, onClose, callId, token, is
               <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>Close</Text>
             </Pressable>
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
