@@ -1,16 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { API_URL } from '@/constants/Config';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/components/scheduler/utils/TimeHelper';
 import { formatPhoneNumber, getMatchedCompanyPhone } from './helpers';
+import DropdownMenu from './DropdownMenu';
 import { callsPalette } from './styles';
 import { IRelatedConversation } from './types';
-
-const MENU_WIDTH = 270;
 
 /**
  * The same customer number also has conversations on our other company numbers.
@@ -62,118 +60,26 @@ export default function RelatedConversationsButton({ conversationId, isDark }: {
       </Pressable>
 
       {menuTop !== null && (
-        <RelatedMenu
+        <DropdownMenu
           top={menuTop}
-          related={related}
-          c={c}
+          align="right"
+          title="ALSO CALLED YOUR OTHER NUMBERS"
           isDark={isDark}
-          companyPhones={companyPhones}
           onClose={() => setMenuTop(null)}
-          onPick={(id) => {
-            setMenuTop(null);
-            router.replace(`/conversation/${id}` as any);
-          }}
+          items={related.map((conv) => {
+            const line = getMatchedCompanyPhone(conv.company_phone, companyPhones);
+            return {
+              key: conv.id,
+              label: line?.description || 'Our number',
+              sublabel: `${formatPhoneNumber(conv.company_phone)} · ${conv.calls_count} ${conv.calls_count === 1 ? 'call' : 'calls'}${conv.last_call_at ? ` · ${formatDate(conv.last_call_at, 'MMM DD')}` : ''}`,
+              dot: line?.color || '#888',
+              color: line?.color,
+              chevron: true,
+              onPress: () => router.replace(`/conversation/${conv.id}` as any),
+            };
+          })}
         />
       )}
     </>
-  );
-}
-
-function RelatedMenu({
-  top,
-  related,
-  c,
-  isDark,
-  companyPhones,
-  onClose,
-  onPick,
-}: {
-  top: number;
-  related: IRelatedConversation[];
-  c: (typeof callsPalette)['light'];
-  isDark: boolean;
-  companyPhones: ReturnType<typeof useAuth>['companyPhones'];
-  onClose: () => void;
-  onPick: (id: string) => void;
-}) {
-  const { width: screenW } = useWindowDimensions();
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withSpring(1, { damping: 18, stiffness: 260, mass: 0.6 });
-  }, [progress]);
-
-  const close = (after: () => void) => {
-    progress.value = withTiming(0, { duration: 120 });
-    setTimeout(after, 120);
-  };
-
-  const backdropStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, progress.value) }));
-  const menuStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(1, progress.value),
-    transform: [{ translateY: -8 * (1 - progress.value) }, { scale: 0.9 + 0.1 * progress.value }],
-  }));
-
-  return (
-    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={() => close(onClose)}>
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(0,0,0,0.35)' : 'rgba(15,23,42,0.15)' }, backdropStyle]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => close(onClose)} accessibilityLabel="Close" />
-      </Animated.View>
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            top,
-            right: 12,
-            width: Math.min(MENU_WIDTH, screenW - 24),
-            borderRadius: 14,
-            paddingVertical: 6,
-            backgroundColor: c.card,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: c.cardBorder,
-            shadowColor: '#000',
-            shadowOpacity: 0.18,
-            shadowRadius: 16,
-            shadowOffset: { width: 0, height: 6 },
-            elevation: 10,
-            transformOrigin: 'top right',
-          },
-          menuStyle,
-        ]}
-      >
-        <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 0.6, color: c.textMuted, paddingHorizontal: 14, paddingTop: 4, paddingBottom: 6 }}>ALSO CALLED YOUR OTHER NUMBERS</Text>
-        {related.map((conv, i) => {
-          const line = getMatchedCompanyPhone(conv.company_phone, companyPhones);
-          return (
-            <Pressable
-              key={conv.id}
-              onPress={() => close(() => onPick(conv.id))}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                backgroundColor: pressed ? c.inputBg : 'transparent',
-                borderTopWidth: i === 0 ? 0 : StyleSheet.hairlineWidth,
-                borderTopColor: c.cardBorder,
-              })}
-            >
-              <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: line?.color || '#888' }} />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: line?.color || c.text }} numberOfLines={1}>
-                  {line?.description || 'Our number'}
-                </Text>
-                <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 1 }} numberOfLines={1}>
-                  {formatPhoneNumber(conv.company_phone)} · {conv.calls_count} {conv.calls_count === 1 ? 'call' : 'calls'}
-                  {conv.last_call_at ? ` · ${formatDate(conv.last_call_at, 'MMM DD')}` : ''}
-                </Text>
-              </View>
-              <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} size={12} tintColor={c.textFaint} />
-            </Pressable>
-          );
-        })}
-      </Animated.View>
-    </Modal>
   );
 }

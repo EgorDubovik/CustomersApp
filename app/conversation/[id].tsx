@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActionSheetIOS, ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { setAudioModeAsync } from 'expo-audio';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,6 +18,7 @@ import SmsComposer from '@/components/calls/SmsComposer';
 import SmsItem from '@/components/calls/SmsItem';
 import TranscriptionModal from '@/components/calls/TranscriptionModal';
 import RelatedConversationsButton from '@/components/calls/RelatedConversationsButton';
+import DropdownMenu, { type DropdownItem } from '@/components/calls/DropdownMenu';
 import { callsPalette, callsStyles as styles } from '@/components/calls/styles';
 import { ICall, ICallComment, IConversation, ISmsMessage, TimelineItem } from '@/components/calls/types';
 import { applyConversationRead, formatPhoneNumber, getCompanyPhone, getCustomerPhone, getEmployeeByPhone, getMatchedCompanyPhone, isSameDay, mergeCallIntoConversation, mergeSmsIntoConversation } from '@/components/calls/helpers';
@@ -212,20 +213,32 @@ export default function ConversationScreen() {
   const openCustomer = () => customer && router.push(`/customer/${customer.id}` as any);
   const createCustomer = () => router.push({ pathname: '/customer/create', params: { phone: customerPhone } } as any);
 
-  // Long-press menu on the title: "View customer" / "Create customer" + "Copy phone number"
+  // Tap on the title: our drop-down — open / create the customer, copy their number, copy our number
+  const titleRef = useRef<View>(null);
+  const [titleMenuTop, setTitleMenuTop] = useState<number | null>(null);
   const openTitleMenu = () => {
     if (!conversation) return;
-    const primary = customer ? { label: 'View customer', action: openCustomer } : { label: 'Create customer', action: createCustomer };
-    const options = [primary, { label: 'Copy phone number', action: copyPhone }];
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { title: formatPhoneNumber(customerPhone) || undefined, options: [...options.map((o) => o.label), 'Cancel'], cancelButtonIndex: options.length },
-        (i) => options[i]?.action(),
-      );
-    } else {
-      Alert.alert(formatPhoneNumber(customerPhone) || 'Caller', undefined, [...options.map((o) => ({ text: o.label, onPress: o.action })), { text: 'Cancel', style: 'cancel' as const }]);
-    }
+    titleRef.current?.measureInWindow((_x, y, _w, h) => setTitleMenuTop(y + h + 8));
   };
+  const copyCompanyPhone = () => {
+    if (!companyPhone) return;
+    Clipboard.setStringAsync(companyPhone);
+    showToast({ message: 'Company number copied', type: 'success' });
+  };
+  const titleMenuItems: DropdownItem[] = [
+    // A colleague on the line isn't a customer: neither "View" nor "Create customer"
+    ...(customer
+      ? [{ key: 'view', label: 'View customer', icon: { ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' }, chevron: true, onPress: openCustomer } as DropdownItem]
+      : employee
+        ? []
+        : [{ key: 'create', label: 'Create customer', icon: { ios: 'person.badge.plus', android: 'person_add', web: 'person_add' }, chevron: true, onPress: createCustomer } as DropdownItem]),
+    ...(customerPhone
+      ? [{ key: 'copy', label: 'Copy phone number', sublabel: formatPhoneNumber(customerPhone), icon: { ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }, onPress: copyPhone } as DropdownItem]
+      : []),
+    ...(companyPhone
+      ? [{ key: 'copy-company', label: 'Copy company phone', sublabel: `${matched?.description || 'Our number'} · ${formatPhoneNumber(companyPhone)}`, icon: { ios: 'building.2', android: 'business', web: 'business' }, onPress: copyCompanyPhone } as DropdownItem]
+      : []),
+  ];
 
   const isFocused = (item: TimelineItem) => !!focus && item.type === focus.type && item.data.id === focus.id;
 
@@ -290,11 +303,10 @@ export default function ConversationScreen() {
           <Pressable onPress={() => router.dismissTo('/(tabs)/calls' as any)} hitSlop={10} style={({ pressed }) => [styles.headerBackBtn, { backgroundColor: c.inputBg }, pressed && { opacity: 0.7 }]}>
             <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={16} tintColor={c.text} />
           </Pressable>
-          {/* Tap: open the customer (when known). Long-press: context menu. Unknown caller: tap opens the menu too. */}
+          {/* Tap: our menu — open / create the customer, copy their number or our number */}
           <Pressable
-            onPress={customer ? openCustomer : openTitleMenu}
-            onLongPress={openTitleMenu}
-            delayLongPress={350}
+            ref={titleRef}
+            onPress={openTitleMenu}
             disabled={!conversation}
             style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.6 }]}
           >
@@ -310,23 +322,15 @@ export default function ConversationScreen() {
                 {formatPhoneNumber(customerPhone)}
               </Text>
             )}
-            {/* The company number this conversation is on — always in sight; tap copies it */}
+            {/* The company number this conversation is on — always in sight (copy: in the title menu) */}
             {!!conversation && !!companyPhone && (
-              <Pressable
-                onPress={() => {
-                  Clipboard.setStringAsync(companyPhone);
-                  showToast({ message: 'Company number copied', type: 'success' });
-                }}
-                hitSlop={6}
-                accessibilityLabel={`Company number ${formatPhoneNumber(companyPhone)}, tap to copy`}
-                style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, alignSelf: 'flex-start', maxWidth: '100%' }, pressed && { opacity: 0.6 }]}
-              >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, alignSelf: 'flex-start', maxWidth: '100%' }}>
                 <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: matched?.color || '#888' }} />
                 <Text style={{ flexShrink: 1, fontSize: 13, fontWeight: '700', color: matched?.color || c.textSecondary }} numberOfLines={1}>
                   {matched?.description || 'Our number'}
                 </Text>
                 <Text style={{ fontSize: 13, color: c.textMuted }}>· {formatPhoneNumber(companyPhone)}</Text>
-              </Pressable>
+              </View>
             )}
           </Pressable>
           <RelatedConversationsButton conversationId={conversation?.id} isDark={isDark} />
@@ -406,6 +410,8 @@ export default function ConversationScreen() {
           onSent={(message) => setConversation((prev) => (prev ? mergeSmsIntoConversation(prev, message) : prev))}
         />
       )}
+
+      {titleMenuTop !== null && <DropdownMenu top={titleMenuTop} align="left" items={titleMenuItems} isDark={isDark} onClose={() => setTitleMenuTop(null)} />}
 
       <TranscriptionModal visible={!!transcriptionCallId} onClose={() => setTranscriptionCallId(null)} callId={transcriptionCallId} token={token} isDark={isDark} />
     </KeyboardAvoidingView>
