@@ -186,21 +186,6 @@ export const callsStyles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  commentToggle: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  commentDot: {
-    position: 'absolute',
-    top: 2,
-    right: 1,
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    borderWidth: 1.5,
-  },
   playerRow: {
     flexDirection: 'row',
     alignItems: 'center',
