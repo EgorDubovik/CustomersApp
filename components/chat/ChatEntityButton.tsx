@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import { useToast } from '@/context/ToastContext';
 import { useColorScheme } from '@/components/useColorScheme';
+import { useKeyboardOverlap } from '@/hooks/useKeyboardOverlap';
 import { callsPalette, callsStyles as styles } from '@/components/calls/styles';
 import ChatAvatar, { PersonAvatar } from './ChatAvatar';
 import { conversationTitle, entityLabel, listTime } from './helpers';
@@ -49,6 +50,8 @@ export default function ChatEntityButton({ entity, suggestedUserIds = [], tint, 
   const [target, setTarget] = useState<Target | null>(null);
   const [comment, setComment] = useState('');
   const [sending, setSending] = useState(false);
+  // The sheet is a pageSheet Modal — KeyboardAvoidingView mis-measures there and hid the comment field.
+  const keyboard = useKeyboardOverlap(open);
 
   const loadMentions = useCallback(() => {
     if (entity.id <= 0) return;
@@ -150,7 +153,7 @@ export default function ChatEntityButton({ entity, suggestedUserIds = [], tint, 
       </Pressable>
 
       <Modal visible={open} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: c.bg }}>
+        <View ref={keyboard.ref} style={{ flex: 1, backgroundColor: c.bg, paddingBottom: keyboard.overlap }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingBottom: 8 }}>
             {mode === 'send' ? (
               <Pressable onPress={() => setMode('main')} hitSlop={10}>
@@ -216,7 +219,7 @@ export default function ChatEntityButton({ entity, suggestedUserIds = [], tint, 
                 {people.length > 0 && caption('COLLEAGUES')}
                 {people.map((e) => option(`u-${e.id}`, target?.kind === 'user' && target.id === e.id, () => setTarget({ kind: 'user', id: e.id, label: e.name }), <PersonAvatar name={e.name} color={e.color} size={36} />, e.name))}
               </ScrollView>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 12, paddingBottom: 28, borderTopWidth: 1, borderTopColor: c.cardBorder, backgroundColor: c.card }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 12, paddingBottom: keyboard.keyboardOpen ? 12 : 28, borderTopWidth: 1, borderTopColor: c.cardBorder, backgroundColor: c.card }}>
                 <TextInput
                   value={comment}
                   onChangeText={setComment}
@@ -231,7 +234,7 @@ export default function ChatEntityButton({ entity, suggestedUserIds = [], tint, 
               </View>
             </>
           )}
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
     </>
   );
