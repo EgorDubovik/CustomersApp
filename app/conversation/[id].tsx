@@ -17,6 +17,7 @@ import NoteItem from '@/components/calls/NoteItem';
 import SmsComposer from '@/components/calls/SmsComposer';
 import SmsItem from '@/components/calls/SmsItem';
 import TranscriptionModal from '@/components/calls/TranscriptionModal';
+import RelatedConversationsButton from '@/components/calls/RelatedConversationsButton';
 import { callsPalette, callsStyles as styles } from '@/components/calls/styles';
 import { ICall, ICallComment, IConversation, ISmsMessage, TimelineItem } from '@/components/calls/types';
 import { applyConversationRead, formatPhoneNumber, getCompanyPhone, getCustomerPhone, getEmployeeByPhone, getMatchedCompanyPhone, isSameDay, mergeCallIntoConversation, mergeSmsIntoConversation } from '@/components/calls/helpers';
@@ -303,13 +304,32 @@ export default function ConversationScreen() {
                 {loading ? 'Loading…' : title}
               </Text>
             </View>
-            {!!conversation && (
+            {/* A known customer / colleague: their number under the name (otherwise it's the title) */}
+            {!!conversation && (customer || employee) && !!customerPhone && (
               <Text style={{ fontSize: 12, color: c.textMuted }} numberOfLines={1}>
-                {(customer || employee) && customerPhone ? `${formatPhoneNumber(customerPhone)}  ·  ` : ''}
-                {conversation.calls_count} {conversation.calls_count === 1 ? 'call' : 'calls'}
+                {formatPhoneNumber(customerPhone)}
               </Text>
             )}
+            {/* The company number this conversation is on — always in sight; tap copies it */}
+            {!!conversation && !!companyPhone && (
+              <Pressable
+                onPress={() => {
+                  Clipboard.setStringAsync(companyPhone);
+                  showToast({ message: 'Company number copied', type: 'success' });
+                }}
+                hitSlop={6}
+                accessibilityLabel={`Company number ${formatPhoneNumber(companyPhone)}, tap to copy`}
+                style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, alignSelf: 'flex-start', maxWidth: '100%' }, pressed && { opacity: 0.6 }]}
+              >
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: matched?.color || '#888' }} />
+                <Text style={{ flexShrink: 1, fontSize: 13, fontWeight: '700', color: matched?.color || c.textSecondary }} numberOfLines={1}>
+                  {matched?.description || 'Our number'}
+                </Text>
+                <Text style={{ fontSize: 13, color: c.textMuted }}>· {formatPhoneNumber(companyPhone)}</Text>
+              </Pressable>
+            )}
           </Pressable>
+          <RelatedConversationsButton conversationId={conversation?.id} isDark={isDark} />
           {canCall && (
             <Pressable
               onPress={callCustomer}
@@ -323,25 +343,6 @@ export default function ConversationScreen() {
           )}
         </View>
 
-        {!!conversation && !!companyPhone && (
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-            {/* Our number the customer reached — tap copies it */}
-            <Pressable
-              onPress={() => {
-                Clipboard.setStringAsync(companyPhone);
-                showToast({ message: 'Company number copied', type: 'success' });
-              }}
-              hitSlop={6}
-              style={({ pressed }) => [styles.headerChip, { backgroundColor: c.bg, borderColor: c.cardBorder }, pressed && { opacity: 0.6 }]}
-            >
-              <Text style={{ fontSize: 11, color: c.textFaint }}>via</Text>
-              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: matched?.color || '#888' }} />
-              <Text style={{ fontSize: 12, fontWeight: '700', color: matched?.color || c.textSecondary }} numberOfLines={1}>{matched?.description || 'Our number'}</Text>
-              <Text style={{ fontSize: 12, color: c.textMuted }}>{formatPhoneNumber(companyPhone)}</Text>
-              <SymbolView name={{ ios: 'doc.on.doc', android: 'content_copy', web: 'content_copy' }} size={11} tintColor={c.textFaint} />
-            </Pressable>
-          </View>
-        )}
       </View>
 
       {/* ─── Timeline ─── */}

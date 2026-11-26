@@ -62,6 +62,14 @@ export interface IConversationNote {
   user: { id: string | number; name: string; color?: string };
 }
 
+/** The same customer number's conversation on another company number (GET /calls/conversation/related) */
+export interface IRelatedConversation {
+  id: string;
+  company_phone: string;
+  last_call_at: string | null;
+  calls_count: number;
+}
+
 export interface IConversation {
   id: string;
   customer_name: string;
