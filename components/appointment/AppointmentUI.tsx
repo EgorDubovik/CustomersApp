@@ -18,6 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { INote } from './types';
 import { palette, styles } from './styles';
+import { linkify } from '@/utils/linkify';
 
 // ─── Pulsing Dot Component ────────────────────────────────────────────────────
 export function PulsingDot({ color }: { color: string }) {
@@ -298,7 +299,7 @@ export function SwipeableNote({
           ]}
         >
           <Text style={[styles.noteText, { color: isSelf ? c.text : '#ffffff' }]}>
-            {note.text}
+            {linkify(note.text)}
           </Text>
           <View style={styles.noteMeta}>
             <Text style={[styles.noteAuthor, { color: isSelf ? c.textMuted : 'rgba(255,255,255,0.7)' }]}>
